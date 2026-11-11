@@ -36,12 +36,12 @@ def tmdb_get(path, api_key, params=None):
     query = {"api_key": api_key, **(params or {})}
     try:
         response = requests.get(f"{BASE_URL}{path}", params=query, timeout=TIMEOUT_SECONDS)
-    except requests.Timeout:
-        raise APIError(f"TMDB did not respond within {TIMEOUT_SECONDS} seconds.")
-    except requests.ConnectionError:
-        raise APIError("Could not connect to TMDB. Check your internet connection.")
+    except requests.Timeout as error:
+        raise APIError(f"TMDB did not respond within {TIMEOUT_SECONDS} seconds.") from error
+    except requests.ConnectionError as error:
+        raise APIError("Could not connect to TMDB. Check your internet connection.") from error
     except requests.RequestException as error:
-        raise APIError(f"Request failed: {error}")
+        raise APIError(f"Request failed: {error}") from error
 
     status = response.status_code
     if status == 401:
@@ -57,8 +57,8 @@ def tmdb_get(path, api_key, params=None):
 
     try:
         return response.json()
-    except ValueError:
-        raise APIError("TMDB sent a response that was not valid JSON.")
+    except ValueError as error:
+        raise APIError("TMDB sent a response that was not valid JSON.") from error
 
 
 def search(query, api_key):
@@ -127,7 +127,9 @@ def format_details(media_type, details):
 def pick_result(results):
     """Ask for a result number; return the chosen item, or None to go back."""
     while True:
-        choice = input(f"\nPick 1-{len(results)} for details, or press Enter to search again: ").strip()
+        choice = input(
+            f"\nPick 1-{len(results)} for details, or press Enter to search again: "
+        ).strip()
         if not choice:
             return None
         if choice.isdigit() and 1 <= int(choice) <= len(results):
@@ -175,7 +177,7 @@ def main():
     except FatalAPIError as error:
         print(error)
         return 1
-    except (KeyboardInterrupt, EOFError):
+    except KeyboardInterrupt, EOFError:
         print()
 
     print("Goodbye.")

@@ -1,0 +1,13 @@
+{% if form.non_field_errors %}
+  <div role="alert" class="alert alert-error">
+    {% for error in form.non_field_errors %}<span>{{ error }}</span>{% endfor %}
+  </div>
+{% endif %}
+{% for field in form %}
+  <fieldset class="fieldset">
+    <label class="fieldset-legend" for="{{ field.id_for_label }}">{{ field.label }}</label>
+    {{ field }}
+    {% for error in field.errors %}<p class="text-error text-sm">{{ error }}</p>{% endfor %}
+    {% if field.help_text %}<div class="label text-xs whitespace-normal">{{ field.help_text|safe }}</div>{% endif %}
+  </fieldset>
+{% endfor %}

@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Log in{% endblock %}
+{% block content %}
+<div class="card bg-base-100 shadow max-w-md mx-auto">
+  <div class="card-body">
+    <h1 class="card-title text-2xl">Log in</h1>
+    <form method="post" action="{% url 'login' %}" class="flex flex-col gap-2">
+      {% csrf_token %}
+      {% include "_form_fields.html" %}
+      <input type="hidden" name="next" value="{{ next }}">
+      <button type="submit" class="btn btn-primary mt-2">Log in</button>
+    </form>
+    <p class="text-sm mt-2">No account yet? <a href="{% url 'signup' %}" class="link link-primary">Sign up</a></p>
+  </div>
+</div>
+{% endblock %}

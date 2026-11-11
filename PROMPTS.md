@@ -28,6 +28,52 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-11 — Implemented Phase 1: project skeleton, accounts, and base layout
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 1`
+2. Yes I approve those three
+3. Yes I approve this test
+4. Yes, continue to behavior 2
+5. Yes I approve the test
+6. Yes, continue onto behavior 3
+7. Yes
+8. Yes go ahead
+9. Phase 1 passes in the browser and the TMDB logo is saved at static/img/tmdb-logo.svg. Please update CLAUDE.md with only the verified commands and actual folder structure created in Phase 1, and update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude checked PyPI before installing. It added Django 6.1.3 (officially supports Python 3.14), DRF 3.18.3, and the dev tools: pytest, pytest-django, responses, ruff, and pytailwindcss.
+  - It created the `config` project, the `accounts` app, and a `watchlist` app. The custom `User` model is in the first migration and registered in the admin.
+  - Accounts features:
+    - sign-up, which logs the new user in and goes to the watchlist
+    - Django's built-in login, POST-only logout, and password change
+    - `/` redirects by login state
+    - login-protected placeholder pages for `/watchlist/` and `/search/`
+  - `base.html` has the navbar, the messages area, the HTMX CSRF header on `<body>`, and a footer with the TMDB logo and notice.
+  - Frontend files:
+    - Tailwind v4.3.5 runs through pytailwindcss with the vendored DaisyUI 5.7.50 plugin, and the compiled CSS is committed.
+    - HTMX 2.0.11 is vendored as a pinned static file.
+  - `.env.example` lists `TMDB_API_KEY`. Settings read `.env` and fall back to safe dev defaults.
+  - Ruff is configured in `pyproject.toml`.
+  - Three behaviors were built test-first, each approved at its red and green steps:
+    1. A suite-wide fixture that blocks the network
+    2. The `/` and `next` redirects
+    3. Sign-up
+  - 20 more normal tests cover logout, login, password change, invalid sign-up, attribution on every page, the layout, messages, starting without a key, and the admin.
+  - All 23 tests and Ruff pass. A real `runserver` was checked with curl. I verified the phase in my browser.
+  - CLAUDE.md now lists the verified commands and the actual folder structure.
+- **Deviations:**
+  - I approved all three TDD behaviors and every test as proposed, without changes.
+  - Claude added two things the plan didn't spell out:
+    - a placeholder `/search/` page, so the navbar link doesn't 404 before Phase 3
+    - a sign-up guard that sends logged-in users to their watchlist. Claude said this was outside strict TDD and covered it with a normal test.
+- **Sideways:**
+  - Downloading the TMDB logo returned 403. A retry with a browser user agent was blocked by the auto-mode classifier as bot-check circumvention. Claude stopped and asked me to download the logo by hand, which I did.
+  - Claude's first messages test asserted nothing useful. It caught this itself and replaced it with one that renders a message through `base.html`.
+  - The first full test run took 24 seconds because of PBKDF2 password hashing. Claude added an autouse fixture that switches tests to a fast hasher, which brought the run down to about 2 seconds.
+  - Ruff flagged B904 in `scripts/tmdb_check.py`. Claude added exception chaining (`from error`), which doesn't change behavior. Ruff's formatter also removed the parentheses from an `except` clause, a form that is valid in Python 3.14.
+
 ## 2026-11-11 — Wrote the initial CLAUDE.md from the PRD
 
 ### Prompts

@@ -21,6 +21,21 @@ A Django web app and DRF API where logged-in users search TMDB for movies and TV
 - TMDB logo and the non-endorsement notice on every page; non-commercial only.
 - Cached TMDB data must not be older than 6 months (refreshed at 150 days).
 
+## Commands
+- Install deps: `uv sync`
+- Migrate / run: `uv run python manage.py migrate`, `uv run python manage.py runserver`
+- Tests: `uv run pytest` (offline; real network calls fail the test)
+- Lint / format: `uv run ruff check .`, `uv run ruff format .`
+- Rebuild CSS (commit the output): `uv run tailwindcss -i static/src/input.css -o static/css/app.css --minify`
+
+## Structure
+- `config/` — settings (reads `.env`) and root URLs.
+- `accounts/` — custom `User`, sign-up form/view, auth URLs under `/accounts/`.
+- `watchlist/` — `/` redirect plus placeholder `/watchlist/` and `/search/` views.
+- `templates/` — `base.html` (navbar, messages, TMDB footer), `registration/`, `accounts/`, `watchlist/`.
+- `static/` — `src/` (Tailwind input + vendored DaisyUI plugin), `css/app.css` (compiled), `js/htmx.min.js`, `img/tmdb-logo.svg`.
+- `tests/` — pytest suite; `conftest.py` blocks the network and provides `user`/`other_user`.
+
 ## References
 - PRD: `prd/cinemovtracker.md`
 - Implementation plan: `plans/cinemovtracker.md`
