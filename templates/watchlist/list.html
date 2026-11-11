@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block title %}My Watchlist{% endblock %}
+{% block content %}
+<div class="mb-4">
+  <h1 class="text-2xl font-bold">My Watchlist</h1>
+  <p class="text-sm opacity-70">{{ items|length }} title{{ items|length|pluralize }}</p>
+</div>
+{% if items %}
+  <div class="overflow-x-auto bg-base-100 rounded-box border border-base-300">
+    <table class="table">
+      <thead>
+        <tr><th class="w-14"><span class="sr-only">Poster</span></th><th>Title</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+          <tr id="item-{{ item.pk }}">
+            <td>{% include "watchlist/_poster.html" with size="w185" classes="w-10 h-14" %}</td>
+            <td>
+              <a href="{% url 'item_detail' item.pk %}" class="link link-hover font-semibold">{{ item.title }}</a>
+              <div class="text-xs opacity-60">{{ item.year|default:"—" }} · {{ item.get_media_type_display }}</div>
+            </td>
+            <td>
+              <span class="badge badge-sm whitespace-nowrap {% if item.status == 'watching' %}badge-info{% elif item.status == 'watched' %}badge-success{% elif item.status == 'on_hold' %}badge-warning{% elif item.status == 'dropped' %}badge-error{% else %}badge-ghost{% endif %}">{{ item.get_status_display }}</span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <div class="card bg-base-100 border border-base-300">
+    <div class="card-body items-center text-center">
+      <p class="font-semibold">Your watchlist is empty.</p>
+      <p class="text-sm opacity-70">Search for a movie or TV show to add it.</p>
+      <a href="{% url 'search' %}" class="btn btn-primary btn-sm mt-2">Search TMDB</a>
+    </div>
+  </div>
+{% endif %}
+{% endblock %}

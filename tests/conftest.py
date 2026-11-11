@@ -32,3 +32,30 @@ def user(django_user_model):
 @pytest.fixture
 def other_user(django_user_model):
     return django_user_model.objects.create_user(username="bob", password=PASSWORD)
+
+
+@pytest.fixture
+def make_item(user):
+    """Build a saved WatchlistItem with sample cached TMDB data; override any field by keyword."""
+    from django.utils import timezone
+
+    from watchlist.models import WatchlistItem
+
+    def build(**fields):
+        values = {
+            "user": user,
+            "tmdb_id": 693134,
+            "media_type": WatchlistItem.MediaType.MOVIE,
+            "title": "Dune: Part Two",
+            "year": 2024,
+            "poster_path": "/czembW0Rk1Ke7lCJGahbOhdCuhV.jpg",
+            "overview": "Paul Atreides unites with the Fremen.",
+            "vote_average": "8.1",
+            "genres": "Science Fiction, Adventure",
+            "runtime": 166,
+            "cached_at": timezone.now(),
+            **fields,
+        }
+        return WatchlistItem.objects.create(**values)
+
+    return build

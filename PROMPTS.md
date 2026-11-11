@@ -28,6 +28,53 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-11 — Implemented Phase 2: WatchlistItem model and read-only My Watchlist page
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 2`
+2. Yes I approve those three
+3. Yes, I approve the test
+4. Yes move onto behavior 2
+5. Yes, I approve the test.
+6. Yes, move on to behavior 3.
+7. Yes, I approve the test.
+8. Yes, go ahead
+9. Phase 2 passes. Please update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude added the `WatchlistItem` model in a single `0001` migration. It has:
+    - the TMDB identity (`tmdb_id`, `media_type`) and every cached TMDB field
+    - status (default "Plan to watch"), an optional 1–10 rating, and notes capped at 2,000 characters by a validator
+    - `created_at` and `updated_at`, newest-first ordering, and a `unique_title_per_user` constraint
+  - `WatchlistItem` is registered in the admin with status and media-type filters and title search.
+  - `/watchlist/` now lists only the logged-in user's items in the variant A table: poster, linked title, year · type, and a colored status badge. It reads only the local database and never calls TMDB. An empty list shows a friendly message with a Search TMDB button.
+  - Posters load from TMDB at w185. A new `initials` template filter and a reusable `_poster.html` partial show an initials placeholder ("Dune: Part Two" → DP) when there's no poster path, and an `onerror` swap shows it when an image fails to load.
+  - Three behaviors were built test-first, each approved at its red and green steps:
+    1. One title per user, while other users can save the same title
+    2. The watchlist shows only my items, newest first
+    3. The w185 poster or the initials placeholder
+  - 12 more normal tests cover:
+    - the status default
+    - rating and notes validation
+    - the admin filters and search
+    - the empty state
+    - the row links
+    - the broken-image fallback
+    - 404 for another user's detail URL
+  - A `make_item` fixture was added to `conftest.py`.
+  - All 38 tests and Ruff pass, and the CSS was rebuilt for the new classes. I verified the phase in my browser.
+- **Deviations:**
+  - I approved all three TDD behaviors and every test as proposed, without changes.
+  - Claude added two things the plan didn't spell out:
+    - a placeholder `/watchlist/<id>/` page, already scoped to the owner, so row links don't 404 before Phase 6
+    - a default of the current time for `cached_at`, so items can be added in the admin without filling it in
+  - Claude proposed the initials rule (first character of the first two words, uppercased) itself, and the poster test fixed it in place.
+- **Sideways:**
+  - Claude regenerated the uncommitted `0001` migration twice instead of stacking new migrations: once to add the unique constraint after the RED step, and once for the `cached_at` default.
+  - Ruff's formatter reformatted one file. No lint errors came up.
+  - Claude didn't run the dev server itself. Checking in the browser was left to me, and it passed.
+
 ## 2026-11-11 — Implemented Phase 1: project skeleton, accounts, and base layout
 
 ### Prompts
