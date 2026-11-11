@@ -28,6 +28,35 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-11 — Wrote the initial CLAUDE.md from the PRD
+
+### Prompts
+1. Create the initial CLAUDE.md for this project and keep it to about 20 to 30 lines. Include only a one-line project description, the approved technology stack and package manager, durable project-wide architecture decisions already established in the PRD, and short pointers to the PRD, plan, and prototypes instead of repeating their details. Do not add commands yet because the project tooling has not been installed or verified. Do not predict project structure, paths, template conventions, URL conventions, or testing commands that do not exist yet. Do not copy business requirements, user stories, implementation phases, rejected alternatives, or detailed feature rules into CLAUDE.md, and do not invent new architectural conventions.
+2. I approve this initial CLAUDE.md. Please update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude read the PRD's Implementation Decisions section, `pyproject.toml`, `.python-version`, the README, and the list of files in the repo.
+  - It wrote a 29-line `CLAUDE.md` at the repo root with these sections:
+    - **Description:** one line saying what the app is.
+    - **Stack:** the approved stack, with uv as the only package manager and no Node.js.
+    - **Architecture decisions:** seven taken from the PRD:
+      - the custom user model from the first migration
+      - one TMDB client that raises a `TMDBError` hierarchy
+      - TMDB data fetched and cached on the server, never supplied by the client
+      - shared services and filtering for the web views, API, and refresh command
+      - every lookup limited to the current user, with 404 for another user's item
+      - session and token auth for the API
+      - secrets in `.env`, and a missing key never stops Django from starting
+    - **TMDB terms:** the logo and notice on every page, and cached data kept under 6 months old.
+    - **References:** pointers to the PRD, the plan, the variant A prototype, and the research note.
+  - I approved it as written. It wasn't committed in this session.
+- **Deviations:**
+  - No questions were asked and no recommendation was overridden.
+  - Claude chose to leave out the `config`, `accounts`, and `watchlist` package names, the URL routes, and the Ruff rule settings, even though the PRD names them. It treated them as predicted structure or tooling details, as the prompt asked, and said so in its summary.
+- **Sideways:**
+  - The first combined read of the PRD, config, README, plan, and prototype produced too much output and was saved to a file. Claude then read the PRD's stack and architecture sections with a targeted search and a line-range read. The plan and prototype were only referenced by path, not read.
+
 ## 2026-11-11 — Turned the Cinemovtracker PRD into an 8-phase plan made of thin, end-to-end slices
 
 ### Prompts
