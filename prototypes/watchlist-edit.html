@@ -1,0 +1,387 @@
+<!doctype html>
+<!--
+  THROWAWAY PROTOTYPE - not production code.
+  Question: How should the My Watchlist page + item editing flow work?
+    A = detail page + quick status dropdown on the list (HTMX)
+    B = everything inline on the list (HTMX)
+    C = separate pages only, no HTMX
+  All data is in memory; nothing talks to Django or TMDB. Open this file directly in a browser.
+
+  DECISION (2026-11-11): Variant A.
+    - List rows: status dropdown that saves on change (hx-post, swaps one row).
+    - Detail page /watchlist/<id>/: cached TMDB info + ModelForm for status/rating/notes (POST -> redirect + message).
+    - Delete: DaisyUI confirm modal -> POST /watchlist/<id>/delete/ -> redirect to list + message.
+    Why: fastest for the most common action (status change), full room for notes/overview,
+    plain ModelForm validation stays simple to test.
+-->
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Watchlist Edit Prototype</title>
+<link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com/3.4.5"></script>
+<style>
+  body { background: #f3f4f6; }
+  .flash { animation: flash 1.4s ease-out; }
+  @keyframes flash { from { background-color: #fef08a; } to { background-color: transparent; } }
+  .proto-bar { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- Prototype switcher (not part of the design being evaluated) -->
+<div class="proto-bar sticky top-0 z-50 bg-black text-yellow-300 text-sm">
+  <div class="max-w-7xl mx-auto px-4 py-2 flex flex-wrap items-center gap-x-4 gap-y-1">
+    <span class="opacity-70">PROTOTYPE</span>
+    <button class="px-2 border border-yellow-300/50 rounded hover:bg-yellow-300 hover:text-black" onclick="switchVariant(-1)" aria-label="Previous variant">&larr;</button>
+    <span id="proto-label" class="font-bold"></span>
+    <button class="px-2 border border-yellow-300/50 rounded hover:bg-yellow-300 hover:text-black" onclick="switchVariant(1)" aria-label="Next variant">&rarr;</button>
+    <button class="px-2 border border-yellow-300/50 rounded hover:bg-yellow-300 hover:text-black" onclick="resetData()">reset data</button>
+    <span class="opacity-60 hidden md:inline">keys: &larr; &rarr;</span>
+  </div>
+  <div class="max-w-7xl mx-auto px-4 pb-2 text-xs text-yellow-100/80" id="proto-desc"></div>
+</div>
+
+<div class="max-w-7xl mx-auto px-4 py-4 grid gap-4 lg:grid-cols-[1fr_340px]">
+  <!-- The app being evaluated -->
+  <div class="bg-base-200 rounded-box overflow-hidden border border-base-300 min-w-0">
+    <div class="navbar bg-base-100 border-b border-base-300 px-4">
+      <div class="flex-1 gap-4">
+        <span class="text-lg font-bold">🎬 Cinemovtracker</span>
+        <span class="hidden sm:inline text-sm opacity-70">Search</span>
+        <span class="hidden sm:inline text-sm font-semibold underline underline-offset-4">My Watchlist</span>
+      </div>
+      <div class="flex-none gap-2 text-sm">
+        <span class="opacity-70 hidden sm:inline">angel</span>
+        <button class="btn btn-ghost btn-sm">Log out</button>
+      </div>
+    </div>
+    <main id="app" class="p-4 sm:p-6"></main>
+    <footer class="px-4 sm:px-6 py-3 border-t border-base-300 bg-base-100 text-xs opacity-70 flex items-center gap-2">
+      <span class="badge badge-sm">TMDB logo</span>
+      This product uses the TMDB API but is not endorsed or certified by TMDB.
+    </footer>
+  </div>
+
+  <!-- Visible state panel (not part of the design) -->
+  <aside id="state" class="proto-bar bg-slate-900 text-slate-100 rounded-box p-4 text-xs space-y-4 lg:sticky lg:top-24 self-start"></aside>
+</div>
+
+<script>
+const STATUSES = [["plan", "Plan to watch"], ["watching", "Watching"], ["watched", "Watched"], ["on_hold", "On hold"], ["dropped", "Dropped"]];
+const BADGE = { plan: "badge-ghost", watching: "badge-info", watched: "badge-success", on_hold: "badge-warning", dropped: "badge-error" };
+const VARIANTS = [
+  { key: "A", name: "Detail page + quick status on list",
+    desc: "List rows have a status dropdown that saves on change (HTMX swaps one row). Click a title for the detail page with the full status/rating/notes form. Delete = confirm modal. Try: change a status, open a title, save rating 11, delete." },
+  { key: "B", name: "Everything inline on the list",
+    desc: "Edit turns the row itself into a form (HTMX swaps the row). Save/Cancel swap it back. Remove asks to confirm inside the row. Try: edit a row, save rating 11, edit a different row, remove." },
+  { key: "C", name: "Separate pages, no HTMX",
+    desc: "Classic Django pages: read-only list -> detail page -> edit page -> back to detail. Delete has its own confirm page. Every step is a full page load (watch the counter)." },
+];
+const SEED = [
+  { id: 1, title: "Dune: Part Two", type: "movie", year: 2024, runtime: 166, genres: ["Science Fiction", "Adventure"], vote: 8.1, cached: "2026-10-02",
+    overview: "Paul Atreides joins the Fremen and seeks revenge against the conspirators who destroyed his family.", status: "watched", rating: 9, notes: "Saw it in IMAX. The sound design is unreal." },
+  { id: 2, title: "Severance", type: "tv", year: 2022, seasons: 2, genres: ["Drama", "Mystery", "Sci-Fi & Fantasy"], vote: 8.4, cached: "2026-09-14",
+    overview: "Office workers whose memories are surgically split between work and home life start to question their employer.", status: "watching", rating: null, notes: "Up to S2E4." },
+  { id: 3, title: "Past Lives", type: "movie", year: 2023, runtime: 106, genres: ["Drama", "Romance"], vote: 7.8, cached: "2026-11-01",
+    overview: "Two childhood friends reconnect decades later and spend one week together in New York.", status: "plan", rating: null, notes: "" },
+  { id: 4, title: "The Bear", type: "tv", year: 2022, seasons: 3, genres: ["Comedy", "Drama"], vote: 8.2, cached: "2026-07-20",
+    overview: "A fine-dining chef comes home to Chicago to run his late brother's struggling sandwich shop.", status: "on_hold", rating: 8, notes: "Paused in the middle of season 3." },
+  { id: 5, title: "Arcane", type: "tv", year: 2021, seasons: 2, genres: ["Animation", "Action & Adventure"], vote: 8.7, cached: "2026-08-30",
+    overview: "Two sisters end up on opposite sides of a conflict between a wealthy city and its undercity.", status: "watched", rating: 10, notes: "" },
+  { id: 6, title: "Babylon", type: "movie", year: 2022, runtime: 189, genres: ["Drama", "Comedy"], vote: 7.0, cached: "2026-06-11",
+    overview: "Ambition and excess collide during Hollywood's shift from silent films to talkies.", status: "dropped", rating: 4, notes: "Stopped at the 2 hour mark." },
+];
+
+let vi = 0;
+try { vi = Math.max(0, VARIANTS.findIndex(v => v.key === localStorage.getItem("proto-watchlist-variant"))); } catch (e) {}
+let items, view, flash, highlight, log, editingId, pendingDelete, modalOpen, formDraft, formErrors;
+
+function resetState() {
+  items = structuredClone(SEED);
+  view = { name: "list" }; flash = null; highlight = null; log = [];
+  editingId = null; pendingDelete = null; modalOpen = false; formDraft = null; formErrors = {};
+  addLog("full", "GET /watchlist/");
+}
+function resetData() { resetState(); render(); }
+function switchVariant(step) {
+  vi = (vi + step + VARIANTS.length) % VARIANTS.length;
+  try { localStorage.setItem("proto-watchlist-variant", VARIANTS[vi].key); } catch (e) {}
+  resetState(); render();
+}
+document.addEventListener("keydown", e => {
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement.tagName)) return;
+  if (e.key === "ArrowLeft") switchVariant(-1);
+  if (e.key === "ArrowRight") switchVariant(1);
+});
+
+// ---------- helpers ----------
+const V = () => VARIANTS[vi].key;
+const find = id => items.find(i => i.id === id);
+function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]); }
+function addLog(kind, text) { log.push({ kind, text }); }
+function label(status) { return STATUSES.find(s => s[0] === status)[1]; }
+function badge(status) { return `<span class="badge ${BADGE[status]} badge-sm whitespace-nowrap">${label(status)}</span>`; }
+function statusOptions(selected) { return STATUSES.map(([v, l]) => `<option value="${v}" ${v === selected ? "selected" : ""}>${l}</option>`).join(""); }
+function ratingText(it) { return it.rating ? `<span class="font-semibold">${it.rating}</span><span class="opacity-50">/10</span>` : `<span class="opacity-40">&mdash;</span>`; }
+function meta(it) { return `${it.year} &middot; ${it.type === "movie" ? "Movie" : "TV"} &middot; ${it.type === "movie" ? it.runtime + " min" : it.seasons + " seasons"}`; }
+function poster(it, cls, big) {
+  const h = [210, 25, 150, 280, 340, 45][it.id % 6];
+  const text = big ? esc(it.title) : esc(it.title.split(/\s+/).map(w => w[0]).join("").slice(0, 2));
+  return `<div class="${cls} rounded-md flex items-end p-1.5 text-white font-bold shrink-0 ${big ? "text-sm" : "text-[11px]"}" style="background:linear-gradient(160deg,hsl(${h} 45% 48%),hsl(${h} 50% 20%))">${text}</div>`;
+}
+function startAction() { flash = null; highlight = null; }
+function go(name, id) {
+  startAction(); formDraft = null; formErrors = {}; modalOpen = false;
+  view = { name, id };
+  const url = { list: "/watchlist/", detail: `/watchlist/${id}/`, edit: `/watchlist/${id}/edit/`, delete: `/watchlist/${id}/delete/` }[name];
+  addLog("full", `GET ${url}`);
+  render();
+}
+function validate(fd) {
+  const errors = {};
+  const raw = fd.get("rating").trim();
+  let rating = null;
+  if (raw !== "") {
+    rating = Number(raw);
+    if (!Number.isInteger(rating) || rating < 1 || rating > 10) errors.rating = "Enter a whole number from 1 to 10, or leave it blank.";
+  }
+  const notes = fd.get("notes");
+  if (notes.length > 2000) errors.notes = "Notes can be at most 2000 characters.";
+  return { errors, data: { status: fd.get("status"), rating, notes }, raw: { status: fd.get("status"), rating: raw, notes } };
+}
+
+// ---------- actions ----------
+function quickStatus(id, status) {
+  startAction();
+  const it = find(id); it.status = status; highlight = id;
+  addLog("htmx", `hx-post /watchlist/${id}/status/ status=${status} -> 200, swapped #item-${id}`);
+  render();
+}
+function submitForm(ev, id) {
+  ev.preventDefault(); startAction();
+  const it = find(id);
+  const { errors, data, raw } = validate(new FormData(ev.target));
+  const v = V();
+  const url = v === "A" ? `/watchlist/${id}/` : `/watchlist/${id}/edit/`;
+  if (Object.keys(errors).length) {
+    formDraft = { id, ...raw }; formErrors = errors;
+    if (v === "B") addLog("htmx", `hx-post ${url} -> 200, swapped #item-${id} with form + errors`);
+    else addLog("full", `POST ${url} -> 200 (whole page re-rendered with errors)`);
+    render(); return false;
+  }
+  Object.assign(it, data); formDraft = null; formErrors = {};
+  if (v === "A") { addLog("full", `POST ${url} -> 302 -> GET /watchlist/${id}/`); flash = `Saved changes to "${it.title}".`; }
+  if (v === "B") { addLog("htmx", `hx-post ${url} -> 200, swapped #item-${id} back to view mode`); editingId = null; highlight = id; }
+  if (v === "C") { addLog("full", `POST ${url} -> 302 -> GET /watchlist/${id}/`); view = { name: "detail", id }; flash = `Saved changes to "${it.title}".`; }
+  render(); return false;
+}
+function startEdit(id) {
+  startAction(); pendingDelete = null; formDraft = null; formErrors = {};
+  editingId = id;
+  addLog("htmx", `hx-get /watchlist/${id}/edit/ -> 200, swapped #item-${id} with form`);
+  render();
+}
+function cancelEdit(id) {
+  startAction(); editingId = null; formDraft = null; formErrors = {};
+  addLog("htmx", `hx-get /watchlist/${id}/row/ -> 200, swapped #item-${id} back to view mode`);
+  render();
+}
+function askDeleteInline(id) { startAction(); editingId = null; pendingDelete = id; addLog("local", `client-side confirm shown in #item-${id} (no request)`); render(); }
+function cancelDeleteInline() { startAction(); pendingDelete = null; render(); }
+function openModal() { startAction(); modalOpen = true; addLog("local", "confirm modal opened (no request)"); render(); }
+function closeModal() { modalOpen = false; render(); }
+function confirmDelete(id) {
+  startAction();
+  const it = find(id);
+  items = items.filter(i => i.id !== id);
+  pendingDelete = null; modalOpen = false;
+  if (V() === "B") {
+    addLog("htmx", `hx-post /watchlist/${id}/delete/ -> 200, removed #item-${id} (outerHTML swap)`);
+  } else {
+    addLog("full", `POST /watchlist/${id}/delete/ -> 302 -> GET /watchlist/`);
+    view = { name: "list" };
+  }
+  flash = `Removed "${it.title}" from your watchlist.`;
+  render();
+}
+
+// ---------- shared pieces ----------
+function header() {
+  return `<div class="mb-4"><h1 class="text-2xl font-bold">My Watchlist</h1><p class="text-sm opacity-70">${items.length} title${items.length === 1 ? "" : "s"}</p></div>`;
+}
+function emptyState() {
+  return `${header()}<div class="card bg-base-100 border border-base-300"><div class="card-body items-center text-center">
+    <p class="font-semibold">Your watchlist is empty.</p><p class="text-sm opacity-70">Search for a movie or TV show to add it.</p>
+    <button class="btn btn-primary btn-sm mt-2">Search TMDB</button></div></div>`;
+}
+function backLink() { return `<button class="link link-hover text-sm mb-4 inline-block" onclick="go('list')">&larr; My Watchlist</button>`; }
+function detailInfo(it) {
+  return `<div class="flex flex-col sm:flex-row gap-5">
+    ${poster(it, "w-32 h-48 sm:w-40 sm:h-60", true)}
+    <div class="flex-1 min-w-0">
+      <h1 class="text-2xl font-bold">${esc(it.title)}</h1>
+      <p class="text-sm opacity-70 mt-1">${meta(it)}</p>
+      <div class="flex flex-wrap gap-1 mt-2">${it.genres.map(g => `<span class="badge badge-outline badge-sm">${esc(g)}</span>`).join("")}</div>
+      <p class="mt-3 text-sm leading-relaxed">${esc(it.overview)}</p>
+      <p class="mt-2 text-xs opacity-60">TMDB score ${it.vote.toFixed(1)}/10 &middot; cached ${it.cached}</p>
+    </div></div>`;
+}
+function itemForm(it, submitLabel, cancelHtml) {
+  const mine = formDraft && formDraft.id === it.id;
+  const d = mine ? formDraft : { status: it.status, rating: it.rating ?? "", notes: it.notes };
+  const e = mine ? formErrors : {};
+  return `<form onsubmit="return submitForm(event, ${it.id})" class="space-y-2" novalidate>
+    <div class="grid sm:grid-cols-2 gap-3">
+      <label class="form-control"><div class="label pb-1"><span class="label-text font-medium">Status</span></div>
+        <select name="status" class="select select-bordered select-sm">${statusOptions(d.status)}</select></label>
+      <label class="form-control"><div class="label pb-1"><span class="label-text font-medium">My rating</span><span class="label-text-alt">1&ndash;10, optional</span></div>
+        <input name="rating" type="number" min="1" max="10" value="${esc(d.rating)}" placeholder="&mdash;" class="input input-bordered input-sm ${e.rating ? "input-error" : ""}">
+        ${e.rating ? `<div class="label pt-1"><span class="label-text-alt text-error">${e.rating}</span></div>` : ""}</label>
+    </div>
+    <label class="form-control"><div class="label pb-1"><span class="label-text font-medium">Notes</span><span class="label-text-alt">${d.notes.length}/2000</span></div>
+      <textarea name="notes" rows="3" class="textarea textarea-bordered ${e.notes ? "textarea-error" : ""}">${esc(d.notes)}</textarea>
+      ${e.notes ? `<div class="label pt-1"><span class="label-text-alt text-error">${e.notes}</span></div>` : ""}</label>
+    <div class="flex gap-2 justify-end pt-1">${cancelHtml || ""}<button class="btn btn-primary btn-sm">${submitLabel}</button></div>
+  </form>`;
+}
+
+// ---------- Variant A ----------
+function aList() {
+  if (!items.length) return emptyState();
+  return `${header()}<div class="overflow-x-auto bg-base-100 rounded-box border border-base-300"><table class="table">
+    <thead><tr><th class="w-12"></th><th>Title</th><th>Status</th><th>My rating</th></tr></thead><tbody>
+    ${items.map(it => `<tr id="item-${it.id}" class="${highlight === it.id ? "flash" : ""}">
+      <td>${poster(it, "w-10 h-14", false)}</td>
+      <td><button class="link link-hover font-semibold text-left" onclick="go('detail', ${it.id})">${esc(it.title)}</button>
+        <div class="text-xs opacity-60">${meta(it)}</div></td>
+      <td><div class="flex items-center gap-2">
+        <select class="select select-bordered select-sm" onchange="quickStatus(${it.id}, this.value)">${statusOptions(it.status)}</select>
+        ${highlight === it.id ? `<span class="text-success text-xs whitespace-nowrap">&check; Saved</span>` : ""}</div></td>
+      <td>${ratingText(it)}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+function aDetail(it) {
+  return `${backLink()}${detailInfo(it)}
+    <div class="card bg-base-100 border border-base-300 mt-6"><div class="card-body p-4 sm:p-5">
+      <h2 class="font-semibold">Your tracking</h2>${itemForm(it, "Save changes")}
+    </div></div>
+    <div class="mt-4 flex justify-end"><button class="btn btn-outline btn-error btn-sm" onclick="openModal()">Remove from watchlist</button></div>
+    <div class="modal ${modalOpen ? "modal-open" : ""}"><div class="modal-box">
+      <h3 class="font-bold text-lg">Remove "${esc(it.title)}"?</h3>
+      <p class="py-3 text-sm">Your status, rating, and notes for this title will be deleted. This can't be undone.</p>
+      <div class="modal-action"><button class="btn btn-sm" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-error btn-sm" onclick="confirmDelete(${it.id})">Remove</button></div>
+    </div></div>`;
+}
+
+// ---------- Variant B ----------
+function bList() {
+  if (!items.length) return emptyState();
+  return `${header()}<ul class="space-y-3">${items.map(it => editingId === it.id ? bEditRow(it) : bViewRow(it)).join("")}</ul>`;
+}
+function bViewRow(it) {
+  const confirming = pendingDelete === it.id;
+  return `<li id="item-${it.id}" class="bg-base-100 rounded-box border border-base-300 p-4 flex gap-4 ${highlight === it.id ? "flash" : ""}">
+    ${poster(it, "w-14 h-20", false)}
+    <div class="flex-1 min-w-0">
+      <div class="flex flex-wrap items-center gap-2"><span class="font-semibold">${esc(it.title)}</span>${badge(it.status)}
+        <span class="text-sm">${ratingText(it)}</span></div>
+      <div class="text-xs opacity-60">${meta(it)} &middot; ${it.genres.map(esc).join(", ")}</div>
+      <p class="text-sm mt-1 line-clamp-2 ${it.notes ? "" : "opacity-40 italic"}">${it.notes ? esc(it.notes) : "No notes"}</p>
+      ${confirming
+        ? `<div class="mt-2 alert alert-warning py-2 text-sm flex flex-wrap"><span>Remove "${esc(it.title)}" and your notes?</span>
+            <div class="flex gap-2"><button class="btn btn-ghost btn-xs" onclick="cancelDeleteInline()">Cancel</button>
+            <button class="btn btn-error btn-xs" onclick="confirmDelete(${it.id})">Remove</button></div></div>`
+        : `<div class="mt-2 flex gap-2"><button class="btn btn-sm" onclick="startEdit(${it.id})">Edit</button>
+            <button class="btn btn-ghost btn-sm text-error" onclick="askDeleteInline(${it.id})">Remove</button></div>`}
+    </div></li>`;
+}
+function bEditRow(it) {
+  return `<li id="item-${it.id}" class="bg-base-100 rounded-box border-2 border-primary p-4">
+    <div class="flex gap-4 mb-2">${poster(it, "w-14 h-20", false)}
+      <div class="min-w-0"><div class="font-semibold">${esc(it.title)}</div><div class="text-xs opacity-60">${meta(it)}</div>
+      <p class="text-xs opacity-70 mt-1 line-clamp-2">${esc(it.overview)}</p></div></div>
+    ${itemForm(it, "Save", `<button type="button" class="btn btn-ghost btn-sm" onclick="cancelEdit(${it.id})">Cancel</button>`)}
+  </li>`;
+}
+
+// ---------- Variant C ----------
+function cList() {
+  if (!items.length) return emptyState();
+  return `${header()}<div class="overflow-x-auto bg-base-100 rounded-box border border-base-300"><table class="table">
+    <thead><tr><th class="w-12"></th><th>Title</th><th>Status</th><th>My rating</th></tr></thead><tbody>
+    ${items.map(it => `<tr>
+      <td>${poster(it, "w-10 h-14", false)}</td>
+      <td><button class="link link-hover font-semibold text-left" onclick="go('detail', ${it.id})">${esc(it.title)}</button>
+        <div class="text-xs opacity-60">${meta(it)}</div></td>
+      <td>${badge(it.status)}</td><td>${ratingText(it)}</td></tr>`).join("")}
+    </tbody></table></div>`;
+}
+function cDetail(it) {
+  return `${backLink()}${detailInfo(it)}
+    <div class="card bg-base-100 border border-base-300 mt-6"><div class="card-body p-4 sm:p-5">
+      <h2 class="font-semibold">Your tracking</h2>
+      <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+        <dt class="opacity-60">Status</dt><dd>${badge(it.status)}</dd>
+        <dt class="opacity-60">My rating</dt><dd>${ratingText(it)}</dd>
+        <dt class="opacity-60">Notes</dt><dd class="whitespace-pre-line ${it.notes ? "" : "opacity-40 italic"}">${it.notes ? esc(it.notes) : "No notes"}</dd>
+      </dl>
+      <div class="flex gap-2 justify-end mt-2">
+        <button class="btn btn-outline btn-error btn-sm" onclick="go('delete', ${it.id})">Remove</button>
+        <button class="btn btn-primary btn-sm" onclick="go('edit', ${it.id})">Edit</button></div>
+    </div></div>`;
+}
+function cEdit(it) {
+  return `<button class="link link-hover text-sm mb-4 inline-block" onclick="go('detail', ${it.id})">&larr; ${esc(it.title)}</button>
+    <h1 class="text-2xl font-bold mb-1">Edit "${esc(it.title)}"</h1><p class="text-sm opacity-70 mb-4">${meta(it)}</p>
+    <div class="card bg-base-100 border border-base-300 max-w-xl"><div class="card-body p-4 sm:p-5">
+      ${itemForm(it, "Save changes", `<button type="button" class="btn btn-ghost btn-sm" onclick="go('detail', ${it.id})">Cancel</button>`)}
+    </div></div>`;
+}
+function cDelete(it) {
+  return `<div class="card bg-base-100 border border-base-300 max-w-lg mx-auto"><div class="card-body">
+    <h1 class="card-title">Remove "${esc(it.title)}"?</h1>
+    <p class="text-sm">Your status, rating, and notes for this title will be deleted. This can't be undone.</p>
+    <div class="card-actions justify-end mt-2"><button class="btn btn-sm" onclick="go('detail', ${it.id})">Cancel</button>
+      <button class="btn btn-error btn-sm" onclick="confirmDelete(${it.id})">Yes, remove it</button></div>
+  </div></div>`;
+}
+
+// ---------- render ----------
+function render() {
+  const v = VARIANTS[vi];
+  document.getElementById("proto-label").textContent = `${v.key} · ${v.name}`;
+  document.getElementById("proto-desc").textContent = v.desc;
+
+  const it = view.id ? find(view.id) : null;
+  let body;
+  if (v.key === "A") body = view.name === "detail" && it ? aDetail(it) : aList();
+  if (v.key === "B") body = bList();
+  if (v.key === "C") body = view.name === "detail" && it ? cDetail(it) : view.name === "edit" && it ? cEdit(it) : view.name === "delete" && it ? cDelete(it) : cList();
+  const flashHtml = flash ? `<div role="alert" class="alert alert-success mb-4 py-2 text-sm"><span>${esc(flash)}</span></div>` : "";
+  document.getElementById("app").innerHTML = flashHtml + body;
+
+  const full = log.filter(l => l.kind === "full").length;
+  const htmx = log.filter(l => l.kind === "htmx").length;
+  const color = { full: "text-rose-300", htmx: "text-emerald-300", local: "text-slate-400" };
+  document.getElementById("state").innerHTML = `
+    <div><div class="text-slate-400 mb-1">STATE</div>
+      <div>variant: <b>${v.key}</b> &middot; view: <b>${view.name}${view.id ? " #" + view.id : ""}</b></div>
+      <div>editing row: ${editingId ?? "none"} &middot; modal: ${modalOpen ? "open" : "closed"}</div>
+      <div class="mt-1"><span class="text-rose-300">full page loads: ${full}</span> &middot; <span class="text-emerald-300">htmx swaps: ${htmx}</span></div></div>
+    <div><div class="text-slate-400 mb-1">REQUEST LOG (newest first)</div>
+      <ol class="space-y-1">${log.slice().reverse().slice(0, 10).map(l => `<li class="${color[l.kind]} break-words">${esc(l.text)}</li>`).join("")}</ol></div>
+    <div><div class="text-slate-400 mb-1">WATCHLIST ITEMS (in memory)</div>
+      <table class="w-full"><tbody>${items.map(i => `<tr class="${highlight === i.id ? "text-yellow-300" : ""}">
+        <td class="pr-2 align-top">#${i.id}</td><td class="pr-2 align-top truncate max-w-[110px]">${esc(i.title)}</td>
+        <td class="pr-2 align-top">${i.status}</td><td class="pr-2 align-top">${i.rating ?? "-"}</td><td class="align-top">${i.notes.length}ch</td></tr>`).join("")}
+      </tbody></table></div>`;
+}
+
+resetState();
+render();
+</script>
+</body>
+</html>

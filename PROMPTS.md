@@ -28,6 +28,79 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-11 — Turned the Cinemovtracker PRD into an 8-phase plan made of thin, end-to-end slices
+
+### Prompts
+1. `/prd-to-plan`
+2. Yes this level of detail works for me. Yes go ahead and combine those that you suggested. 3 and 4 combined, 7 and 8 combined, and 9 and 10 combined. Also just keep phase 2 as it is with the model and read-only watchlist.
+3. Update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude read `prd/cinemovtracker.md` and the existing repo. There's no Django code yet, only the TMDB check script and the research note.
+  - It proposed 11 thin phases, each cutting through every layer and listing the PRD user stories it covers. I approved combining the search phases (3 + 4), the editing phases (7 + 8), and the API phases (9 + 10).
+  - The final plan was written to `plans/cinemovtracker.md`. It has 8 phases:
+    1. Project skeleton, accounts, and base layout
+    2. WatchlistItem model and a read-only My Watchlist page
+    3. TMDB search
+    4. Save from search
+    5. Organizing the watchlist
+    6. Detail page, editing, status change from the list, and delete
+    7. REST API
+    8. `refresh_tmdb` command and README
+  - The plan opens with the decisions every phase relies on: URLs, the model, which app owns what, login, frontend, testing, and config. Each phase has its own acceptance checklist.
+  - Claude's project memory was updated to say the plan is approved and Phase 1 is next. No application code was written.
+- **Deviations:**
+  - Claude asked three questions: was the level of detail right, which phases should be combined, and should Phase 2 add the model before saving from search exists (so Phase 2 could only be checked using the admin).
+  - I accepted all three suggested merges and kept Phase 2 as proposed. No recommendation was overridden.
+- **Sideways:**
+  - The PRD wasn't already loaded in the conversation, as the skill expects, so Claude found it in `prd/` instead of asking me for it.
+  - The first command that read the PRD, README, config, and memory files produced too much output and was saved to a file. Claude then read that file in full.
+  - The PRD didn't specify the exact login and account URLs, so Claude picked Django's standard `/accounts/…` paths and said so in its summary.
+
+## 2026-11-11 — Designed Cinemovtracker in a grill-me session, prototyped the watchlist editing UI, and wrote the PRD
+
+### Prompts
+1. `/grill-me` I want to build a new Django app called Cinemovtracker that lets users search for movies and TV shows and save them to a personal watchlist. I am building this with Django, Django REST Framework, uv, SQLite, Ruff, Tailwind CSS with DaisyUI, HTMX for interactivity, and pytest. Based on my research in docs/research/free-media-apis.md and scripts/tmdb_check.py, logged-in users need to be able to search the TMDB API for movies and shows, save them locally so they work offline, and add their own watch status, personal rating, and notes. Users also need to search, filter, sort, and paginate their saved watchlist, and the app needs a full CRUD DRF API where users must log in and can only view or change their own items. Finally, make sure it handles empty searches and TMDB API errors cleanly without crashing.
+2. Option A (data model: one `WatchlistItem` table)
+3. Option A (duplicates: unique constraint on user + tmdb_id + media_type)
+4. Option B (five watch statuses)
+5. Option A (rating: whole number 1–10)
+6. Option B′ (on save, server fetches TMDB details and stores the richer field set)
+7. Option A (6-month rule: `refresh_tmdb` management command)
+8. Yes I am okay with the customer user model. Option A
+9. Option B and yes include the filters
+10. Option B (TMDB paging: Prev/Next with per-type search endpoints)
+11. Option A (Save button: in-place HTMX swap)
+12. `/prototype` Before I pick choose, build a quick UI prototype comparing how the My Watchlist page and item editing flow look for each option.
+13. After looking at the options, I want to go with option A
+14. Option B (watchlist: title search, status/type filters, 5 sorts, 10 per page)
+15. Option B (API auth: session + token)
+16. Option A (API: TMDB identity set once on create; 503 on TMDB outage)
+17. Option A (shared filtering function for web and API)
+18. Option A (TMDB client module with an exception hierarchy; never crash on a missing key)
+19. Option A (tests: `responses` for HTTP, `monkeypatch` for views/API)
+20. Option A (frontend: Tailwind standalone CLI + DaisyUI plugin file + local HTMX)
+21. Option A (layout: `config` project with `accounts` and `watchlist` apps)
+22. Option A (posters from TMDB's image server with a placeholder fallback)
+23. Option A (no TMDB search caching)
+24. Option A (HTMX-aware login redirect)
+25. Option A (out-of-scope list accepted as proposed)
+26. `/to-prd`
+27. Update PROMPTS.md with our session log using the standard format
+
+### Summary
+- **Outcome:** A 23-question grill-me session settled the Cinemovtracker design: data model, duplicates, statuses, rating, cached TMDB fields, the 6-month refresh, accounts, TMDB search and paging, the Save flow, editing UI, watchlist controls, API auth and contract, shared filtering, the TMDB error hierarchy, the test strategy, frontend tooling, project layout, posters, caching, HTMX login redirects, and scope. The questions about editing and deleting were answered with a throwaway UI prototype, `prototypes/watchlist-edit.html`, which compares three variants (A, B, C) with a switcher, a request log, and a state panel. Variant A was chosen, and the decision is recorded at the top of that file. The PRD was written to `prd/cinemovtracker.md`, with 69 user stories, the implementation decisions, the out-of-scope list, and notes. A summary of the decisions was also saved to Claude's project memory. No application code was written.
+- **Deviations:**
+  - For question 1, I chose Option A (one `WatchlistItem` table) over the recommended Option B (a shared `Title` table plus `WatchlistEntry`). This accepts duplicated TMDB data per user in exchange for a simpler model.
+  - For question 11 (editing UI), I asked for a UI prototype before deciding instead of answering directly, then picked A, the recommended option.
+  - Every other answer matched the recommendation. A few sub-questions were never answered explicitly and were treated as accepted: "Plan to watch" as the default status, rating being optional, 503 for TMDB outages, and the `/` redirect. So were the defaults Claude stated without asking: Django version, admin, Ruff rules, and `.env` settings.
+- **Sideways:**
+  - In question 5, Claude realized partway through its own question that the "never trust client TMDB data" rule meant both original options needed a server-side TMDB call. It rewrote the options as A′/B′ inside the same message instead of starting the question over.
+  - Node.js isn't installed, so the prototype's JavaScript couldn't be syntax-checked. The prototype was opened in the browser but not verified by Claude. This finding also shaped question 18: standalone Tailwind CLI, no Node.
+  - The first command that read the research note produced too much output and was saved to a file. The relevant TMDB sections were then read with a targeted search.
+  - The prototype loads Tailwind and DaisyUI from CDNs, which is fine for a throwaway file. The real app will serve them locally so it works offline.
+
 ## 2026-11-11 — Researched free media APIs, chose TMDB, built a TMDB check script with uv
 
 ### Prompts
