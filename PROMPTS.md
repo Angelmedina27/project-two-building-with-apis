@@ -28,6 +28,56 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-13 — Implemented Phase 7: REST API
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 7`
+2. Yes, I approve them.
+3. Yes, I approve
+4. Yes, move onto behavior 2
+5. Yes, I approve
+6. Yes, move onto behavior 3
+7. Yes, I approve
+8. Yes, go ahead
+9. It passed, go ahead and update PROMPTS.md with our session log
+
+### Summary
+- **Outcome:**
+  - Claude added Django REST Framework (the already-installed 3.18.3) and its `authtoken` app:
+    - Token and session authentication, authenticated users only, and page-number pagination at 10 per page.
+    - `POST /api/auth/token/` exchanges a username and password for a token.
+    - `/api/auth/` holds login and logout links for the browsable API.
+  - Claude added a new `watchlist/api/` sub-package:
+    - `serializers.py`: `WatchlistItemSerializer`. On create it requires `media_type` and `tmdb_id`, with optional status, rating, and notes. After create, the identity becomes read-only through `get_extra_kwargs`. Cached TMDB fields, timestamps, and `id` are always read-only.
+    - Create calls the shared `add_to_watchlist` service. A duplicate or TMDB not found returns 400 with a clear message; TMDB unavailable or a config error returns 503 with a JSON `detail`, and nothing is saved.
+    - `views.py`: a `ModelViewSet` whose queryset is always the request user's items, so other users' items return 404. The list action applies the shared `filter_watchlist`, and the owner is set from the request on create.
+    - `urls.py`: a DRF router at `/api/watchlist/`.
+  - TDD covered three behaviors:
+    - create from identity only, with server-filled TMDB fields and client-sent TMDB/owner fields ignored;
+    - mapping create errors to 400 or 503 with nothing saved and no exception text leaked;
+    - PUT/PATCH changing only status, rating, and notes, with 400 field errors for an invalid rating or notes and a clearable rating.
+  - Normal tests covered:
+    - the token endpoint, including bad credentials;
+    - token, session, and browsable-API access, and a bad token;
+    - 401 for anonymous list, create, retrieve, PUT, PATCH, and delete;
+    - pagination shape and size;
+    - only the user's items being listed;
+    - the API list returning exactly the website's items and order for 11 filter/sort combinations;
+    - detail lookups ignoring list filters;
+    - retrieve, delete, and 404 for another user's item on every method;
+    - invalid create input returning 400 without calling TMDB.
+  - The suite grew to 197 tests, all passing; Ruff check and format were clean, and there were no missing migrations. Claude ran `migrate` on the dev database to add the token tables. The user verified the phase manually in the browser and with curl.
+- **Deviations:**
+  - The user approved every step as proposed and asked no follow-up questions.
+  - Claude departed from the PRD in three small ways and explained each:
+    - DRF has no built-in service-unavailable exception, so Claude added a small `ServiceUnavailable(APIException)` with status 503.
+    - Token authentication is listed before session authentication, so anonymous requests get a 401 with `WWW-Authenticate: Token` instead of a 403.
+    - List filters apply only to the list action, so `?status=…` on a detail URL can't cause a false 404.
+- **Sideways:**
+  - Behavior 2's first RED run raised exceptions in the test client instead of failing on assertions. Claude set the test's `APIClient` to `raise_request_exception=False` so the tests saw the 500 response an API caller would get, and noted the change.
+  - Claude's first GREEN attempt imported `ServiceUnavailable` from `rest_framework.exceptions`, as the PRD described. It doesn't exist in DRF 3.18.3, and the failed import broke URL loading, so 107 tests failed. Claude checked the installed DRF source and defined the exception itself.
+  - A long combined shell command failed to parse and ran nothing. Claude rewrote the files with the file-editing tools instead.
+
 ## 2026-11-13 — Implemented Phase 6: Detail, editing, status change from the list, and delete
 
 ### Prompts
