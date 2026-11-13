@@ -28,6 +28,39 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-13 — Implemented Phase 5: Organizing the watchlist
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 5`
+2. Yes, I approve
+3. Yes, I approve
+4. Yes, move onto behavior 2
+5. Yes, I approve
+6. Yes, go ahead with behavior 3
+7. Yes, I approve
+8. Yes, go ahead
+9. This phase passed. Go ahead and update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude added `watchlist/filters.py`, shared by the web list now and by the API in Phase 7:
+    - `clean_filters(params)` keeps only recognized values: a trimmed `q`, a `status` from the model's choices, `movie`/`tv`, and a sort from the whitelist. Anything else becomes empty or the default sort. It accepts a dict or a `QueryDict`.
+    - `filter_watchlist(queryset, params)` applies a case-insensitive title substring plus exact status and type filters. It then orders by the `SORTS` whitelist: recent (default), title A–Z, rating, year, and TMDB score. The last three put missing values last with `nulls_last=True`, and ties fall back to newest first.
+  - Claude rebuilt `/watchlist/`:
+    - It now uses `htmx_login_required` and the shared filter, with 10 items per page through `Paginator.get_page`. A non-numeric page shows page 1 and an out-of-range page shows the last one.
+    - Previous/Next links keep every non-empty filter and leave out the default sort.
+    - htmx requests get only `_watchlist_results.html`; history-restore and normal requests get the full page. Responses vary on `HX-Request`.
+  - `list.html` gained a GET controls form (search, status, type, sort, Apply). htmx upgrades it to swap the list region and push the URL whenever a control changes or the form is submitted.
+  - The list region shows the total match count, plus the rating and TMDB score on each row. A filtered view with no matches gets its own empty state with Clear filters and Search TMDB; a truly empty watchlist keeps the original one.
+  - TDD covered three behaviors: combined filters with unknown values ignored, the rating sort with unrated last, and pagination falling back to the nearest valid page while keeping parameters. Normal tests covered the other sorts, each filter on its own, owner scoping, `QueryDict` input, 10 per page with `q`/`media_type` kept in links, no pagination on a single page, fragment versus full page (including history restore), the controls showing the current selection and the defaults, the filtered empty state, and anonymous htmx and normal redirects.
+  - The suite went from 113 to 133 tests; Ruff check and format pass; the CSS was rebuilt for the new classes.
+  - The user verified the phase manually in the browser.
+- **Deviations:**
+  - None. The user approved each proposed behavior and test as written.
+  - When presenting behavior 3's test, Claude pointed out that it requires empty parameters to be left out of pagination links. The user accepted that without changes.
+  - In behavior 2, Claude added all five sort orders, not just the rating one the test needed, because they are one data table. It said so in the GREEN summary.
+- **Sideways:** Nothing went wrong. Each RED was a real assertion failure on the first run, with no scaffolding fixes needed.
+
 ## 2026-11-13 — Implemented Phase 4: Save from search
 
 ### Prompts

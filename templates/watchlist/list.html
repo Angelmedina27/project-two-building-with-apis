@@ -1,39 +1,40 @@
 {% extends "base.html" %}
 {% block title %}My Watchlist{% endblock %}
 {% block content %}
-<div class="mb-4">
-  <h1 class="text-2xl font-bold">My Watchlist</h1>
-  <p class="text-sm opacity-70">{{ items|length }} title{{ items|length|pluralize }}</p>
+<h1 class="text-2xl font-bold mb-4">My Watchlist</h1>
+{# A plain GET form; htmx upgrades it to swap only the list and push the URL. #}
+<form method="get" action="{% url 'watchlist' %}" role="search"
+      hx-get="{% url 'watchlist' %}" hx-target="#watchlist-results" hx-push-url="true"
+      hx-trigger="submit, change" hx-sync="this:replace" hx-indicator="#watchlist-spinner"
+      class="grid grid-cols-2 sm:flex sm:flex-row gap-2 mb-4">
+  <label class="sr-only" for="watchlist-q">Search my watchlist</label>
+  <input id="watchlist-q" type="search" name="q" value="{{ filters.q }}" placeholder="Search my watchlist"
+         class="input col-span-2 w-full sm:flex-1">
+  <label class="sr-only" for="watchlist-status">Status</label>
+  <select id="watchlist-status" name="status" class="select w-full sm:w-40">
+    <option value="">All statuses</option>
+    {% for value, label in status_choices %}
+      <option value="{{ value }}"{% if value == filters.status %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <label class="sr-only" for="watchlist-type">Type</label>
+  <select id="watchlist-type" name="media_type" class="select w-full sm:w-32">
+    <option value="">All types</option>
+    <option value="movie"{% if filters.media_type == "movie" %} selected{% endif %}>Movies</option>
+    <option value="tv"{% if filters.media_type == "tv" %} selected{% endif %}>TV</option>
+  </select>
+  <label class="sr-only" for="watchlist-sort">Sort by</label>
+  <select id="watchlist-sort" name="sort" class="select w-full sm:w-44">
+    {% for value, label in sort_choices %}
+      <option value="{{ value }}"{% if value == filters.sort %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary">
+    Apply
+    <span id="watchlist-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+  </button>
+</form>
+<div id="watchlist-results" aria-live="polite">
+  {% include "watchlist/_watchlist_results.html" %}
 </div>
-{% if items %}
-  <div class="overflow-x-auto bg-base-100 rounded-box border border-base-300">
-    <table class="table">
-      <thead>
-        <tr><th class="w-14"><span class="sr-only">Poster</span></th><th>Title</th><th>Status</th></tr>
-      </thead>
-      <tbody>
-        {% for item in items %}
-          <tr id="item-{{ item.pk }}">
-            <td>{% include "watchlist/_poster.html" with size="w185" classes="w-10 h-14" %}</td>
-            <td>
-              <a href="{% url 'item_detail' item.pk %}" class="link link-hover font-semibold">{{ item.title }}</a>
-              <div class="text-xs opacity-60">{{ item.year|default:"—" }} · {{ item.get_media_type_display }}</div>
-            </td>
-            <td>
-              <span class="badge badge-sm whitespace-nowrap {% if item.status == 'watching' %}badge-info{% elif item.status == 'watched' %}badge-success{% elif item.status == 'on_hold' %}badge-warning{% elif item.status == 'dropped' %}badge-error{% else %}badge-ghost{% endif %}">{{ item.get_status_display }}</span>
-            </td>
-          </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
-{% else %}
-  <div class="card bg-base-100 border border-base-300">
-    <div class="card-body items-center text-center">
-      <p class="font-semibold">Your watchlist is empty.</p>
-      <p class="text-sm opacity-70">Search for a movie or TV show to add it.</p>
-      <a href="{% url 'search' %}" class="btn btn-primary btn-sm mt-2">Search TMDB</a>
-    </div>
-  </div>
-{% endif %}
 {% endblock %}

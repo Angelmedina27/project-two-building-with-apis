@@ -2,6 +2,7 @@ from urllib.parse import urlencode, urlsplit
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.paginator import Paginator
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -11,6 +12,7 @@ from django.views.decorators.http import require_POST
 
 from . import services, tmdb
 from .decorators import htmx_login_required, is_htmx
+from .filters import DEFAULT_SORT, SORTS, clean_filters, filter_watchlist
 from .models import WatchlistItem
 
 SEARCH_TYPES = {"all": "All", "movie": "Movies", "tv": "TV"}
@@ -20,11 +22,48 @@ def home(request):
     return redirect("watchlist" if request.user.is_authenticated else "login")
 
 
-@login_required
+WATCHLIST_PAGE_SIZE = 10
+
+
+@htmx_login_required
 def watchlist(request):
     # Reads only the local cache; the watchlist never calls TMDB.
-    items = WatchlistItem.objects.filter(user=request.user)
-    return render(request, "watchlist/list.html", {"items": items})
+    filters = clean_filters(request.GET)
+    mine = WatchlistItem.objects.filter(user=request.user)
+    items = filter_watchlist(mine, filters)
+    # get_page turns a non-numeric page into 1 and an out-of-range page into the last one.
+    page_obj = Paginator(items, WATCHLIST_PAGE_SIZE).get_page(request.GET.get("page"))
+
+    # Links keep the current filters, leaving out empty ones and the default sort.
+    kept = {
+        key: value
+        for key, value in filters.items()
+        if value and not (key == "sort" and value == DEFAULT_SORT)
+    }
+
+    def page_url(number):
+        return f"{request.path}?{urlencode({**kept, 'page': number})}"
+
+    context = {
+        "filters": filters,
+        "status_choices": WatchlistItem.Status.choices,
+        "sort_choices": [(value, label) for value, (label, _) in SORTS.items()],
+        "page_obj": page_obj,
+        "items": page_obj.object_list,
+        # Tells "nothing matches these filters" apart from "nothing saved yet".
+        "has_any_items": page_obj.paginator.count > 0 or mine.exists(),
+        "previous_url": page_url(page_obj.previous_page_number())
+        if page_obj.has_previous()
+        else None,
+        "next_url": page_url(page_obj.next_page_number()) if page_obj.has_next() else None,
+    }
+    template = (
+        "watchlist/_watchlist_results.html" if _wants_fragment(request) else "watchlist/list.html"
+    )
+    response = render(request, template, context)
+    # The same URL returns a fragment or a full page, so caches must keep them apart.
+    patch_vary_headers(response, ["HX-Request"])
+    return response
 
 
 def _search_page(value):

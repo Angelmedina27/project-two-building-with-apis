@@ -1,0 +1,62 @@
+{% if items %}
+  <p class="text-sm opacity-70 mb-2">{{ page_obj.paginator.count }} title{{ page_obj.paginator.count|pluralize }}</p>
+  <div class="overflow-x-auto bg-base-100 rounded-box border border-base-300">
+    <table class="table">
+      <thead>
+        <tr><th class="w-14"><span class="sr-only">Poster</span></th><th>Title</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        {% for item in items %}
+          <tr id="item-{{ item.pk }}">
+            <td>{% include "watchlist/_poster.html" with size="w185" classes="w-10 h-14" %}</td>
+            <td>
+              <a href="{% url 'item_detail' item.pk %}" class="link link-hover font-semibold">{{ item.title }}</a>
+              <div class="text-xs opacity-60">
+                {{ item.year|default:"—" }} · {{ item.get_media_type_display }}
+                {% if item.rating %} · My rating {{ item.rating }}/10{% endif %}
+                {% if item.vote_average %} · <span title="TMDB score">★ {{ item.vote_average|floatformat:1 }}</span>{% endif %}
+              </div>
+            </td>
+            <td>
+              <span class="badge badge-sm whitespace-nowrap {% if item.status == 'watching' %}badge-info{% elif item.status == 'watched' %}badge-success{% elif item.status == 'on_hold' %}badge-warning{% elif item.status == 'dropped' %}badge-error{% else %}badge-ghost{% endif %}">{{ item.get_status_display }}</span>
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% if page_obj.paginator.num_pages > 1 %}
+    <nav class="flex items-center justify-center gap-3 mt-6" aria-label="Watchlist pages">
+      {% if previous_url %}
+        <a href="{{ previous_url }}" hx-get="{{ previous_url }}" hx-target="#watchlist-results" hx-push-url="true" class="btn btn-sm">« Previous</a>
+      {% else %}
+        <span class="btn btn-sm btn-disabled" aria-disabled="true">« Previous</span>
+      {% endif %}
+      <span class="text-sm">Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}</span>
+      {% if next_url %}
+        <a href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#watchlist-results" hx-push-url="true" class="btn btn-sm">Next »</a>
+      {% else %}
+        <span class="btn btn-sm btn-disabled" aria-disabled="true">Next »</span>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% elif has_any_items %}
+  <div class="card bg-base-100 border border-base-300">
+    <div class="card-body items-center text-center">
+      <p class="font-semibold">No titles on your watchlist match these filters.</p>
+      <p class="text-sm opacity-70">Try different filters, or search TMDB to add something new.</p>
+      <div class="flex gap-2 mt-2">
+        <a href="{% url 'watchlist' %}" class="btn btn-sm">Clear filters</a>
+        <a href="{% url 'search' %}" class="btn btn-primary btn-sm">Search TMDB</a>
+      </div>
+    </div>
+  </div>
+{% else %}
+  <div class="card bg-base-100 border border-base-300">
+    <div class="card-body items-center text-center">
+      <p class="font-semibold">Your watchlist is empty.</p>
+      <p class="text-sm opacity-70">Search for a movie or TV show to add it.</p>
+      <a href="{% url 'search' %}" class="btn btn-primary btn-sm mt-2">Search TMDB</a>
+    </div>
+  </div>
+{% endif %}
