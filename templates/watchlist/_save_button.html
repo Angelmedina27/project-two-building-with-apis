@@ -1,0 +1,23 @@
+{# One search result's Save control. POST /watchlist/add/ re-renders this whole slot. #}
+<div class="save-slot flex flex-wrap items-center gap-2 mt-1" aria-live="polite">
+  {% if slot.state == "saved" %}
+    <span class="badge badge-success">✓ Saved</span>
+    <a href="{% url 'item_detail' slot.item.pk %}" class="link link-primary text-sm">Edit</a>
+  {% elif slot.state == "on_watchlist" %}
+    <span class="badge badge-ghost">On watchlist</span>
+  {% elif slot.state == "not_found" %}
+    <span class="text-sm text-error">This title was not found on TMDB.</span>
+  {% else %}
+    {% if slot.state == "error" %}
+      <span class="text-sm text-warning">Couldn't save, try again.</span>
+    {% endif %}
+    <form method="post" action="{% url 'add_item' %}"
+          hx-post="{% url 'add_item' %}" hx-target="closest .save-slot" hx-swap="outerHTML"
+          hx-disabled-elt="find button">
+      {% csrf_token %}
+      <input type="hidden" name="media_type" value="{{ slot.media_type }}">
+      <input type="hidden" name="tmdb_id" value="{{ slot.tmdb_id }}">
+      <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+  {% endif %}
+</div>

@@ -28,13 +28,47 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-13 — Implemented Phase 4: Save from search
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 4`
+2. Yes I approve the behaviors
+3. Yes, I approve the test.
+4. Yes, move onto behavior 2
+5. Yes, I approve the test.
+6. Yes go ahead with behavior 3
+7. Yes, I approve the test.
+8. Yes, go ahead
+9. It passed. Go ahead and update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude added `watchlist/services.py` with `add_to_watchlist(user, media_type, tmdb_id, **user_fields)`:
+    - It fetches TMDB details and maps title/name, year, poster, overview, the score rounded to one decimal (0 → none), joined genres, runtime (movies) or seasons (TV), and `cached_at`. Status defaults to plan.
+    - It raises `AlreadyOnWatchlist` before calling TMDB when the title is already saved. It also raises it when a concurrent save hits the unique constraint, which is caught inside a savepoint and confirmed against the database.
+    - TMDB errors propagate, and nothing is saved.
+  - Claude added POST-only `/watchlist/add/` (`add_item`), protected by `htmx_login_required`:
+    - It reads only `media_type` and `tmdb_id`; invalid values return 400 without calling TMDB.
+    - htmx requests get the `_save_button.html` fragment in one of four states: Saved + Edit link, On watchlist, not found on TMDB, or Couldn't save, try again (with the button kept). Every state is a 200.
+    - Plain form posts add a message and redirect back to the same-site `/search/` referer, otherwise to `/search/`.
+  - Search result cards now include the Save slot. Already-saved titles show "On watchlist", found with one query on (tmdb_id, media_type) limited to the ids on the page.
+  - TDD covered three behaviors: the service's field mapping, the four fragment states (including a real unique-constraint race), and the one-query marking. Normal tests covered TMDB failure in the service, duplicates, GET rejection (405), ignored client-sent fields, invalid input, the non-htmx redirect and messages, and the session-expired login redirects.
+  - The suite went from 85 to 113 tests; Ruff check and format pass; the CSS was rebuilt for the new classes.
+  - The user verified the phase manually in the browser.
+- **Deviations:** None. The user approved each proposed behavior and test as written. "Nothing saved on TMDB failure" was tested as a normal test after behavior 1's GREEN, to keep to one test per cycle; Claude said so when presenting the test.
+- **Sideways:**
+  - Claude's first service stub raised `NotImplementedError`, which wouldn't have been a real assertion RED. It was changed to a no-op before the run.
+  - Behavior 2's test expected an HTML-escaped apostrophe (`Couldn&#x27;t`), but Django doesn't escape literal template text. Claude made a mechanical fix to the expected string and noted it; what the test asserts didn't change.
+  - The non-htmx redirect test followed the redirect onto the search page, which tried a real TMDB call and was caught by the network block. It was fixed by stubbing `tmdb.search` in that test.
+  - `git status` showed a change to `PROMPTS.md` that Claude didn't make: the user's typo fix in the Phase 3 entry ("behavior 23" → "behavior 2"). Claude pointed it out and left it in place.
+
 ## 2026-11-13 — Implemented Phase 3: TMDB search (client, page, HTMX, and paging)
 
 ### Prompts
 1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 3`
 2. Yes I approve the behaviors
 3. Yes, I approve the test.
-4. Yes, move onto behavior 23
+4. Yes, move onto behavior 2
 5. Yes, I approve the test.
 6. Yes, move onto behavior 3
 7. Yes, I approve this test.

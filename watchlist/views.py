@@ -1,10 +1,15 @@
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
+from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
+from django.urls import reverse
 from django.utils.cache import patch_vary_headers
+from django.utils.http import url_has_allowed_host_and_scheme
+from django.views.decorators.http import require_POST
 
-from . import tmdb
+from . import services, tmdb
 from .decorators import htmx_login_required, is_htmx
 from .models import WatchlistItem
 
@@ -41,6 +46,7 @@ def _result_card(result):
         "poster_path": result.get("poster_path") or "",
         "vote_average": result.get("vote_average") or None,
         "overview": result.get("overview") or "",
+        "state": "form",
     }
 
 
@@ -74,8 +80,19 @@ def search(request):
                 params = {"q": query, "type": media_filter, "page": number}
                 return f"{request.path}?{urlencode(params)}"
 
+            results = [_result_card(r) for r in data["results"]]
+            # One query for the (tmdb_id, media_type) pairs on this page the user has saved.
+            saved = set(
+                WatchlistItem.objects.filter(
+                    user=request.user, tmdb_id__in={card["tmdb_id"] for card in results}
+                ).values_list("tmdb_id", "media_type")
+            )
+            for card in results:
+                if (card["tmdb_id"], card["media_type"]) in saved:
+                    card["state"] = "on_watchlist"
+
             context.update(
-                results=[_result_card(r) for r in data["results"]],
+                results=results,
                 page=page,
                 total_pages=total_pages,
                 previous_url=page_url(page - 1) if page > 1 else None,
@@ -89,6 +106,59 @@ def search(request):
     # The same URL returns a fragment or a full page, so caches must keep them apart.
     patch_vary_headers(response, ["HX-Request"])
     return response
+
+
+SAVE_MESSAGES = {
+    "saved": (messages.SUCCESS, "Saved “{title}” to your watchlist."),
+    "on_watchlist": (messages.INFO, "That title is already on your watchlist."),
+    "not_found": (messages.ERROR, "That title was not found on TMDB."),
+    "error": (messages.WARNING, "Couldn't save that title right now. Please try again."),
+}
+
+
+def _back_to_search(request):
+    """The search page the plain (non-htmx) Save form came from, or a fresh search."""
+    referer = request.headers.get("Referer", "")
+    if url_has_allowed_host_and_scheme(
+        referer, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        parts = urlsplit(referer)
+        if parts.path == reverse("search"):
+            return parts.path + (f"?{parts.query}" if parts.query else "")
+    return reverse("search")
+
+
+@require_POST
+@htmx_login_required
+def add_item(request):
+    # Only the title's identity is read from the client; TMDB fields come from TMDB.
+    media_type = request.POST.get("media_type")
+    try:
+        tmdb_id = int(request.POST.get("tmdb_id", ""))
+    except ValueError:
+        tmdb_id = 0
+    if media_type not in WatchlistItem.MediaType.values or tmdb_id < 1:
+        return HttpResponseBadRequest("Invalid title.")
+
+    item = None
+    try:
+        item = services.add_to_watchlist(request.user, media_type, tmdb_id)
+    except services.AlreadyOnWatchlist:
+        state = "on_watchlist"
+    except tmdb.TMDBNotFound:
+        state = "not_found"
+    except tmdb.TMDBError:
+        state = "error"
+    else:
+        state = "saved"
+
+    if not is_htmx(request):
+        level, text = SAVE_MESSAGES[state]
+        messages.add_message(request, level, text.format(title=item.title if item else ""))
+        return redirect(_back_to_search(request))
+
+    slot = {"state": state, "item": item, "media_type": media_type, "tmdb_id": tmdb_id}
+    return render(request, "watchlist/_save_button.html", {"slot": slot})
 
 
 @login_required

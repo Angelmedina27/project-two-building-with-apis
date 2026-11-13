@@ -1,6 +1,8 @@
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 
 from watchlist import tmdb
 
@@ -205,3 +207,46 @@ def test_total_pages_are_capped_at_tmdbs_limit(logged_in, fake_search):
 def test_single_page_of_results_has_no_pager(logged_in, fake_search):
     html = logged_in.get("/search/?q=dune").content.decode()
     assert "Page 1 of 1" not in html
+
+
+def _card(html, title):
+    """The HTML of the search result card with this title."""
+    cards = html.split("<li ")[1:]
+    return next(card for card in cards if title in card)
+
+
+def _watchlist_queries(queries):
+    return [q["sql"] for q in queries if "watchlist_watchlistitem" in q["sql"]]
+
+
+def test_already_saved_results_show_on_watchlist_using_one_query(
+    logged_in, fake_search, user, other_user, make_item
+):
+    dune_tv_namesake = {**SHOGUN, "id": DUNE["id"], "name": "Dune: Prophecy"}
+    severance = {**SHOGUN, "id": 95396, "name": "Severance"}
+    make_item(tmdb_id=DUNE["id"], media_type="movie")  # alice saved the Dune movie...
+    make_item(user=other_user, tmdb_id=SHOGUN["id"], media_type="tv")  # ...bob saved Shōgun.
+
+    fake_search.reply = {"results": [DUNE, SHOGUN, dune_tv_namesake], "page": 1, "total_pages": 1}
+    with CaptureQueriesContext(connection) as three_results:
+        html = logged_in.get("/search/?q=dune").content.decode()
+
+    saved_card = _card(html, "Dune: Part Two")
+    assert "On watchlist" in saved_card
+    assert 'hx-post="/watchlist/add/"' not in saved_card
+    # Another user's save and a TV show sharing the movie's TMDB id are still saveable.
+    for title in ("Shōgun", "Dune: Prophecy"):
+        card = _card(html, title)
+        assert "On watchlist" not in card
+        assert 'hx-post="/watchlist/add/"' in card
+
+    # Marking costs one query no matter how many results there are.
+    fake_search.reply = {
+        "results": [DUNE, SHOGUN, dune_tv_namesake, severance] * 5,
+        "page": 1,
+        "total_pages": 1,
+    }
+    with CaptureQueriesContext(connection) as twenty_results:
+        logged_in.get("/search/?q=dune")
+    assert len(_watchlist_queries(three_results.captured_queries)) == 1
+    assert len(_watchlist_queries(twenty_results.captured_queries)) == 1

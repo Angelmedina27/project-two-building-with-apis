@@ -35,6 +35,7 @@
             {% if result.vote_average %}<span class="opacity-70" title="TMDB score">★ {{ result.vote_average|floatformat:1 }}</span>{% endif %}
           </div>
           <p class="text-sm opacity-80">{{ result.overview|default:"No overview available."|truncatechars:200 }}</p>
+          {% include "watchlist/_save_button.html" with slot=result %}
         </div>
       </li>
     {% endfor %}
