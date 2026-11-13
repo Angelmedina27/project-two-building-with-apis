@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 from . import services, tmdb
 from .decorators import htmx_login_required, is_htmx
 from .filters import DEFAULT_SORT, SORTS, clean_filters, filter_watchlist
+from .forms import WatchlistItemForm
 from .models import WatchlistItem
 
 SEARCH_TYPES = {"all": "All", "movie": "Movies", "tv": "TV"}
@@ -202,6 +203,38 @@ def add_item(request):
 
 @login_required
 def item_detail(request, pk):
-    # Placeholder until the detail page and edit form are built in Phase 6.
+    # Shows only the stored copy of the TMDB details; no TMDB call is made.
     item = get_object_or_404(WatchlistItem, pk=pk, user=request.user)
-    return render(request, "watchlist/placeholder.html", {"heading": item.title})
+    if request.method == "POST":
+        form = WatchlistItemForm(request.POST, instance=item)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Saved your changes to “{item.title}”.")
+            return redirect("item_detail", pk=item.pk)
+    else:
+        form = WatchlistItemForm(instance=item)
+    genres = [genre.strip() for genre in item.genres.split(",") if genre.strip()]
+    return render(request, "watchlist/detail.html", {"item": item, "form": form, "genres": genres})
+
+
+@require_POST
+@htmx_login_required
+def item_status(request, pk):
+    item = get_object_or_404(WatchlistItem, pk=pk, user=request.user)
+    status = request.POST.get("status")
+    if status not in WatchlistItem.Status.values:
+        return HttpResponseBadRequest("Invalid status.")
+    item.status = status
+    item.save(update_fields=["status", "updated_at"])
+    context = {"item": item, "status_choices": WatchlistItem.Status.choices, "just_saved": True}
+    return render(request, "watchlist/_watchlist_row.html", context)
+
+
+@require_POST
+@login_required
+def item_delete(request, pk):
+    item = get_object_or_404(WatchlistItem, pk=pk, user=request.user)
+    title = item.title
+    item.delete()
+    messages.success(request, f"Removed “{title}” from your watchlist.")
+    return redirect("watchlist")

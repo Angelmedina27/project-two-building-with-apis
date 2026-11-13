@@ -3,24 +3,11 @@
   <div class="overflow-x-auto bg-base-100 rounded-box border border-base-300">
     <table class="table">
       <thead>
-        <tr><th class="w-14"><span class="sr-only">Poster</span></th><th>Title</th><th>Status</th></tr>
+        <tr><th class="w-14"><span class="sr-only">Poster</span></th><th>Title</th><th>Status</th><th>My rating</th></tr>
       </thead>
       <tbody>
         {% for item in items %}
-          <tr id="item-{{ item.pk }}">
-            <td>{% include "watchlist/_poster.html" with size="w185" classes="w-10 h-14" %}</td>
-            <td>
-              <a href="{% url 'item_detail' item.pk %}" class="link link-hover font-semibold">{{ item.title }}</a>
-              <div class="text-xs opacity-60">
-                {{ item.year|default:"—" }} · {{ item.get_media_type_display }}
-                {% if item.rating %} · My rating {{ item.rating }}/10{% endif %}
-                {% if item.vote_average %} · <span title="TMDB score">★ {{ item.vote_average|floatformat:1 }}</span>{% endif %}
-              </div>
-            </td>
-            <td>
-              <span class="badge badge-sm whitespace-nowrap {% if item.status == 'watching' %}badge-info{% elif item.status == 'watched' %}badge-success{% elif item.status == 'on_hold' %}badge-warning{% elif item.status == 'dropped' %}badge-error{% else %}badge-ghost{% endif %}">{{ item.get_status_display }}</span>
-            </td>
-          </tr>
+          {% include "watchlist/_watchlist_row.html" %}
         {% endfor %}
       </tbody>
     </table>

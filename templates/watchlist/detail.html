@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block content %}
+<a href="{% url 'watchlist' %}" class="link link-hover text-sm mb-4 inline-block">← My Watchlist</a>
+
+<div class="flex flex-col sm:flex-row gap-5">
+  <div class="shrink-0">
+    {% include "watchlist/_poster.html" with size="w342" classes="w-32 h-48 sm:w-40 sm:h-60" %}
+  </div>
+  <div class="flex-1 min-w-0">
+    <h1 class="text-2xl font-bold">{{ item.title }}</h1>
+    <p class="text-sm opacity-70 mt-1">
+      {{ item.year|default:"Year unknown" }} · {{ item.get_media_type_display }}
+      {% if item.media_type == "movie" and item.runtime %} · {{ item.runtime }} min{% endif %}
+      {% if item.media_type == "tv" and item.number_of_seasons %} · {{ item.number_of_seasons }} season{{ item.number_of_seasons|pluralize }}{% endif %}
+    </p>
+    {% if genres %}
+      <div class="flex flex-wrap gap-1 mt-2">
+        {% for genre in genres %}<span class="badge badge-outline badge-sm">{{ genre }}</span>{% endfor %}
+      </div>
+    {% endif %}
+    <p class="mt-3 text-sm leading-relaxed">{{ item.overview|default:"No overview available." }}</p>
+    <p class="mt-2 text-xs opacity-60">
+      {% if item.vote_average %}TMDB score {{ item.vote_average|floatformat:1 }}/10 · {% endif %}Details from TMDB, updated {{ item.cached_at|date:"M j, Y" }}
+    </p>
+  </div>
+</div>
+
+<div class="card bg-base-100 border border-base-300 mt-6">
+  <div class="card-body p-4 sm:p-5">
+    <h2 class="font-semibold">Your tracking</h2>
+    <form method="post" action="{% url 'item_detail' item.pk %}" novalidate>
+      {% csrf_token %}
+      {% include "_form_fields.html" %}
+      <div class="flex justify-end mt-2">
+        <button type="submit" class="btn btn-primary btn-sm">Save changes</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{# The confirm modal is the only way to delete; it submits a POST to the delete URL. #}
+<div class="mt-4 flex justify-end">
+  <button type="button" class="btn btn-outline btn-error btn-sm" onclick="document.getElementById('remove-modal').showModal()">Remove from watchlist</button>
+</div>
+<dialog id="remove-modal" class="modal" aria-labelledby="remove-modal-title">
+  <div class="modal-box">
+    <h3 id="remove-modal-title" class="font-bold text-lg">Remove “{{ item.title }}”?</h3>
+    <p class="py-3 text-sm">Your status, rating, and notes for this title will be deleted. This can't be undone.</p>
+    <div class="modal-action">
+      <form method="dialog"><button class="btn btn-sm">Cancel</button></form>
+      <form method="post" action="{% url 'item_delete' item.pk %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-error btn-sm">Remove</button>
+      </form>
+    </div>
+  </div>
+  <form method="dialog" class="modal-backdrop"><button>Close</button></form>
+</dialog>
+{% endblock %}

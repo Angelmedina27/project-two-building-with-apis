@@ -61,8 +61,10 @@ def test_unknown_values_fall_back_to_the_defaults_in_the_controls(client, user, 
 
     assert response.status_code == 200
     assert "Severance" in html
-    assert '<option value="recent" selected>Recently added</option>' in html
-    assert " selected>" not in html.replace(
+    # Only the controls form is checked; each row's status dropdown has its own selection.
+    controls = html[: html.index('id="watchlist-results"')]
+    assert '<option value="recent" selected>Recently added</option>' in controls
+    assert " selected>" not in controls.replace(
         '<option value="recent" selected>Recently added</option>', ""
     )
 

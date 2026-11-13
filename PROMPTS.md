@@ -28,6 +28,48 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-13 — Implemented Phase 6: Detail, editing, status change from the list, and delete
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 6`
+2. Yes, I approve these three
+3. Yes, I approve
+4. Yes, move onto behavior 2
+5. Yes, I approve
+6. Yes, move onto behavior 3
+7. Yes, I approve
+8. Yes, go ahead
+9. It passed, go ahead and update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude added `/watchlist/<id>/status/`, a POST-only view using `htmx_login_required` and scoped to the user's items:
+    - It accepts only the five status codes; anything else gets a 400 and nothing is saved.
+    - It returns the re-rendered row with "✓ Saved".
+    - Each row moved into a new `_watchlist_row.html`, whose status dropdown posts on change and swaps only that row. The table gained a "My rating" column, as in prototype variant A.
+  - Claude replaced the Phase 2 placeholder with the real detail page (`detail.html`) and deleted the placeholder template:
+    - It shows the stored TMDB info: a w342 poster or initials placeholder, year, type, runtime or season count, genre badges, overview, TMDB score, and the cached date.
+    - Its "Your tracking" card holds the new `WatchlistItemForm` from `watchlist/forms.py`, a model form for status, rating, and notes only, validated by the model's own validators.
+    - A valid POST redirects back with "Saved your changes to …"; an invalid one re-renders with field errors.
+  - Claude added `/watchlist/<id>/delete/`, POST-only and scoped to the user. It deletes the item and redirects to the watchlist with "Removed … from your watchlist." The only way to reach it in the UI is a DaisyUI `<dialog>` confirm modal on the detail page.
+  - TDD covered three behaviors: the status quick-update (including rejecting an invalid code), detail form validation (out-of-range or fractional rating, notes too long, a blank rating allowed, the success message), and owner-only, POST-only delete.
+  - Normal tests covered:
+    - 404 for another user's item on view, edit, and status change;
+    - the status endpoint rejecting GET;
+    - the htmx login redirect after the session expires during a status change, returning to the current page;
+    - the row dropdown markup;
+    - the detail page showing cached fields for a movie and a TV show, poster or placeholder, with no TMDB call;
+    - TMDB fields sent in the form being ignored;
+    - the modal markup;
+    - anonymous redirects for detail and delete.
+  - The suite went from 134 to 146 tests. Ruff check and format pass, the CSS was rebuilt, and the CLAUDE.md structure notes list the new routes.
+  - The user verified the phase manually in the browser.
+- **Deviations:**
+  - None. The user approved each proposed behavior and test as written.
+- **Sideways:**
+  - Claude's first scripted edit to `watchlist/views.py` crashed. Python read the file with the Windows default encoding instead of UTF-8 (the file contains curly quotes), so the stub view was never written and the first test run failed on a missing attribute rather than an assertion. Claude reran the edit with explicit UTF-8, and RED then failed on an assertion as intended.
+  - After behavior 1, an existing Phase 5 test failed. It asserted that no option on the page was `selected` except the default sort, and the new row dropdowns always have a selected option. Claude noted this as a mechanical repair and limited the check to the controls form; what the test asserts did not change.
+
 ## 2026-11-13 — Implemented Phase 5: Organizing the watchlist
 
 ### Prompts

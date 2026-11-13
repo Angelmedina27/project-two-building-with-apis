@@ -1,0 +1,25 @@
+<tr id="item-{{ item.pk }}">
+  <td>{% include "watchlist/_poster.html" with size="w185" classes="w-10 h-14" %}</td>
+  <td>
+    <a href="{% url 'item_detail' item.pk %}" class="link link-hover font-semibold">{{ item.title }}</a>
+    <div class="text-xs opacity-60">
+      {{ item.year|default:"—" }} · {{ item.get_media_type_display }}
+      {% if item.vote_average %} · <span title="TMDB score">★ {{ item.vote_average|floatformat:1 }}</span>{% endif %}
+    </div>
+  </td>
+  <td>
+    {# Saves on change and swaps just this row. #}
+    <div class="flex items-center gap-2">
+      <label class="sr-only" for="status-{{ item.pk }}">Status for {{ item.title }}</label>
+      <select id="status-{{ item.pk }}" name="status" class="select select-sm w-36"
+              hx-post="{% url 'item_status' item.pk %}" hx-trigger="change"
+              hx-target="#item-{{ item.pk }}" hx-swap="outerHTML">
+        {% for value, label in status_choices %}
+          <option value="{{ value }}"{% if value == item.status %} selected{% endif %}>{{ label }}</option>
+        {% endfor %}
+      </select>
+      {% if just_saved %}<span class="text-success text-xs whitespace-nowrap" role="status">✓ Saved</span>{% endif %}
+    </div>
+  </td>
+  <td class="whitespace-nowrap">{% if item.rating %}{{ item.rating }}/10{% else %}<span class="opacity-40">—</span>{% endif %}</td>
+</tr>
