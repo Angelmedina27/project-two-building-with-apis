@@ -58,3 +58,15 @@ def add_to_watchlist(user, media_type, tmdb_id, **user_fields):
         if existing.exists():
             raise AlreadyOnWatchlist from None
         raise
+
+
+def refresh_item(item):
+    """Re-fetch ``item``'s TMDB details and update its cached fields and ``cached_at``.
+
+    The user's own fields are left alone. ``tmdb.TMDBError`` propagates and nothing changes.
+    """
+    fields = _cached_fields(item.media_type, tmdb.get_details(item.media_type, item.tmdb_id))
+    for name, value in fields.items():
+        setattr(item, name, value)
+    item.save(update_fields=[*fields, "updated_at"])
+    return item

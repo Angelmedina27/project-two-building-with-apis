@@ -28,6 +28,53 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-13 — Implemented Phase 8: TMDB refresh command and README
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 8`
+2. Yes, I approve them.
+3. Yes, I approve
+4. Yes, move onto behavior 2
+5. Yes, I approve
+6. Yes, move onto behavior 3
+7. Yes, I approve
+8. It passed, go ahead and update PROMPTS.md with our session log
+
+### Summary
+- **Outcome:**
+  - Claude added `refresh_item` to `watchlist/services.py`:
+    - It re-fetches a title's TMDB details and maps them with the same `_cached_fields` helper used by `add_to_watchlist`.
+    - It saves only the cached fields, `cached_at`, and `updated_at`, so status, rating, and notes are never touched.
+    - On a `TMDBError`, nothing changes.
+  - Claude added the `refresh_tmdb` management command:
+    - It selects items whose `cached_at` is more than 150 days old, in pk order, and refreshes each one through the service.
+    - It catches only `TMDBError`, logs a warning naming the failed title, and keeps going.
+    - It prints `Refreshed N item(s); M failed.`
+  - TDD covered three behaviors:
+    - the refresh service updating the cached fields and `cached_at` while keeping the user's fields;
+    - the command refreshing only items older than 150 days (tested at 151 and 149 days);
+    - the command logging and skipping a failing item, finishing the rest, and printing correct counts.
+  - Normal tests covered:
+    - not-found and config errors leaving the item unchanged;
+    - the command skipping those errors;
+    - a run with nothing stale making no TMDB calls;
+    - stale items for every user being refreshed.
+  - Claude replaced the placeholder `README.md` with:
+    - setup, including a PowerShell copy command;
+    - the Tailwind watch and build commands;
+    - tests and Ruff;
+    - an API endpoint table, query parameters, curl examples, and error codes;
+    - running and scheduling `refresh_tmdb` (Windows Task Scheduler and cron);
+    - why search caching and local poster storage were skipped;
+    - the project layout and TMDB attribution.
+  - The suite grew to 205 tests, all passing. Ruff check and format were clean, and no migrations were needed. The user verified the phase manually.
+- **Deviations:**
+  - The user approved every step as proposed and asked no follow-up questions.
+  - Behavior 3's RED run failed on an uncaught `TMDBUnavailable` exception, not on an assertion as the TDD skill requires. Claude flagged this and explained that the crash was the missing behavior itself, not missing scaffolding. The user approved the test as written.
+- **Sideways:**
+  - Adding imports to the test file with `sed` put them out of order. Ruff's autofix sorted them during the lint step. The assertions didn't change.
+  - Nothing else went wrong.
+
 ## 2026-11-13 — Implemented Phase 7: REST API
 
 ### Prompts
