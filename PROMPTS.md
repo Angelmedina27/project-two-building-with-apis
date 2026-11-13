@@ -28,6 +28,59 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-13 — Implemented Phase 3: TMDB search (client, page, HTMX, and paging)
+
+### Prompts
+1. `/implement @prd/cinemovtracker.md @plans/cinemovtracker.md implement Phase 3`
+2. Yes I approve the behaviors
+3. Yes, I approve the test.
+4. Yes, move onto behavior 23
+5. Yes, I approve the test.
+6. Yes, move onto behavior 3
+7. Yes, I approve this test.
+8. Yes, go ahead with the rest
+9. Phase 3 passed. Now update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:**
+  - Claude added `watchlist/tmdb.py`, the only module that makes TMDB HTTP calls:
+    - one private `_get()` with a 10-second timeout and the `api_key` query parameter
+    - the exception hierarchy `TMDBError` > `TMDBNotFound`, `TMDBUnavailable` > `TMDBConfigError`
+    - 404 → not found; timeout, connection error, 429, 5xx, other non-200s and invalid JSON → unavailable; missing key or 401 → config error, logged at error level without the key
+    - `search()`: All uses multi-search with people removed; Movies and TV use their own endpoints, and the client adds the media type to their results; TMDB's page and total pages pass through
+    - `get_details()`, plus `title_of()` and `year_of()` helpers for Phase 4
+  - Claude added `watchlist/decorators.py` with `htmx_login_required`:
+    - Logged-out HTMX requests get a 200 response with an `HX-Redirect` to login.
+    - `next` is the request path for GETs. For POSTs it comes from `HX-Current-URL`, which must be on the same site; otherwise it's `/`.
+    - Normal requests get Django's standard login redirect.
+  - `/search/` replaced the placeholder:
+    - It's a GET form that works without JavaScript. With htmx it swaps only the results region and pushes the URL.
+    - It returns the full page on an htmx history-restore request and sets `Vary: HX-Request`.
+    - Result cards show a w185 poster or initials, title, Movie/TV badge, year, ★ score and a short overview.
+    - "Page X of Y" with Previous/Next links keeps q and type. Total pages are capped at TMDB's 500.
+    - Invalid page values fall back to page 1, and an unknown type falls back to All.
+    - Empty or whitespace queries show a prompt without calling TMDB. Also covered: no results, and friendly alerts for unavailable and config errors, all with a 200 response and no technical details.
+  - Three behaviors were built test-first, each approved at its red and green steps:
+    1. TMDB failures map to the exception hierarchy
+    2. Each filter uses the right search endpoint and results contain only saveable titles
+    3. The HTMX-aware login redirect
+  - Normal tests cover the search page and the rest of the client: success, key and timeout, and the title/year helpers.
+  - The CSS was rebuilt for the new DaisyUI classes, and CLAUDE.md's structure notes were updated.
+  - All 83 tests and Ruff pass, and `manage.py check` passes with no key set. I verified the phase in my browser.
+- **Deviations:**
+  - I approved all three TDD behaviors and every test as proposed, without changes.
+  - My "move onto behavior 23" was a typo; Claude read it as behavior 2 and said so.
+  - Claude made a few choices the plan didn't spell out:
+    - An unknown filter falls back to All in the client.
+    - The decorator takes `next` for POST requests from `HX-Current-URL` and checks it against the current host.
+    - Page values above 500 fall back to page 1 instead of being clamped.
+    - `TMDBNotFound` during search shows the "unavailable" alert.
+    - The pager is hidden when there's only one page.
+- **Sideways:**
+  - The first full test run had one failure, a mistake in Claude's own test. It expected "SH" initials for "Shōgun", but the `initials` filter takes one letter per word, so the right value is "S". Claude fixed the test, not the app.
+  - Ruff's formatter rewrapped one line in `views.py`. No lint errors came up.
+  - Claude didn't run the dev server itself. Checking in the browser was left to me, and it passed.
+
 ## 2026-11-11 — Implemented Phase 2: WatchlistItem model and read-only My Watchlist page
 
 ### Prompts

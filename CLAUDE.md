@@ -31,7 +31,7 @@ A Django web app and DRF API where logged-in users search TMDB for movies and TV
 ## Structure
 - `config/` — settings (reads `.env`) and root URLs.
 - `accounts/` — custom `User`, sign-up form/view, auth URLs under `/accounts/`.
-- `watchlist/` — `/` redirect plus placeholder `/watchlist/` and `/search/` views.
+- `watchlist/` — `/` redirect, `/watchlist/` list, `/search/` (HTMX results fragment or full page); `tmdb.py` is the only TMDB HTTP client; `decorators.py` has `htmx_login_required` (use it on every HTMX endpoint).
 - `templates/` — `base.html` (navbar, messages, TMDB footer), `registration/`, `accounts/`, `watchlist/`.
 - `static/` — `src/` (Tailwind input + vendored DaisyUI plugin), `css/app.css` (compiled), `js/htmx.min.js`, `img/tmdb-logo.svg`.
 - `tests/` — pytest suite; `conftest.py` blocks the network and provides `user`/`other_user`.

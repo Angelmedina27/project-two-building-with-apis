@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Search{% endblock %}
+{% block content %}
+<h1 class="text-2xl font-bold mb-4">Search TMDB</h1>
+{# A plain GET form; htmx upgrades it to swap only the results and push the URL. #}
+<form method="get" action="{% url 'search' %}" role="search"
+      hx-get="{% url 'search' %}" hx-target="#search-results" hx-push-url="true"
+      hx-indicator="#search-spinner"
+      class="flex flex-col sm:flex-row gap-2 mb-6">
+  <label class="sr-only" for="search-q">Title</label>
+  <input id="search-q" type="search" name="q" value="{{ query }}" placeholder="Movie or TV show title"
+         class="input w-full sm:flex-1" autofocus>
+  <label class="sr-only" for="search-type">Type</label>
+  <select id="search-type" name="type" class="select w-full sm:w-36">
+    {% for value, label in search_types.items %}
+      <option value="{{ value }}"{% if value == media_filter %} selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn btn-primary">
+    Search
+    <span id="search-spinner" class="loading loading-spinner loading-xs htmx-indicator"></span>
+  </button>
+</form>
+<div id="search-results" aria-live="polite">
+  {% include "watchlist/_search_results.html" %}
+</div>
+{% endblock %}

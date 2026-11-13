@@ -1,0 +1,57 @@
+{% if error == "config" %}
+  <div role="alert" class="alert alert-error">
+    <span>Search isn't set up right now, so TMDB can't be searched. Your watchlist still works.</span>
+  </div>
+{% elif error == "unavailable" %}
+  <div role="alert" class="alert alert-warning">
+    <span>TMDB isn't responding right now. Please try again in a moment.</span>
+  </div>
+{% elif not query %}
+  <div class="card bg-base-100 border border-base-300">
+    <div class="card-body items-center text-center">
+      <p class="font-semibold">Find a movie or TV show</p>
+      <p class="text-sm opacity-70">Type a title above and press Search.</p>
+    </div>
+  </div>
+{% elif not results %}
+  <div class="card bg-base-100 border border-base-300">
+    <div class="card-body items-center text-center">
+      <p class="font-semibold">No movies or TV shows match “{{ query }}”.</p>
+      <p class="text-sm opacity-70">Check the spelling or try a different title or type.</p>
+    </div>
+  </div>
+{% else %}
+  <ul class="flex flex-col gap-3">
+    {% for result in results %}
+      <li class="card card-side bg-base-100 border border-base-300">
+        <figure class="shrink-0 p-3 pr-0">
+          {% include "watchlist/_poster.html" with item=result size="w185" classes="w-16 h-24" %}
+        </figure>
+        <div class="card-body p-3 gap-1">
+          <h2 class="font-semibold">{{ result.title }}</h2>
+          <div class="flex flex-wrap items-center gap-2 text-xs">
+            <span class="badge badge-sm badge-outline">{{ result.media_label }}</span>
+            <span class="opacity-70">{{ result.year|default:"Year unknown" }}</span>
+            {% if result.vote_average %}<span class="opacity-70" title="TMDB score">★ {{ result.vote_average|floatformat:1 }}</span>{% endif %}
+          </div>
+          <p class="text-sm opacity-80">{{ result.overview|default:"No overview available."|truncatechars:200 }}</p>
+        </div>
+      </li>
+    {% endfor %}
+  </ul>
+  {% if total_pages > 1 %}
+    <nav class="flex items-center justify-center gap-3 mt-6" aria-label="Search result pages">
+      {% if previous_url %}
+        <a href="{{ previous_url }}" hx-get="{{ previous_url }}" hx-target="#search-results" hx-push-url="true" class="btn btn-sm">« Previous</a>
+      {% else %}
+        <span class="btn btn-sm btn-disabled" aria-disabled="true">« Previous</span>
+      {% endif %}
+      <span class="text-sm">Page {{ page }} of {{ total_pages }}</span>
+      {% if next_url %}
+        <a href="{{ next_url }}" hx-get="{{ next_url }}" hx-target="#search-results" hx-push-url="true" class="btn btn-sm">Next »</a>
+      {% else %}
+        <span class="btn btn-sm btn-disabled" aria-disabled="true">Next »</span>
+      {% endif %}
+    </nav>
+  {% endif %}
+{% endif %}
