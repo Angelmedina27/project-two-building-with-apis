@@ -28,6 +28,30 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-14 — Added a status summary bar to the My Watchlist page
+
+### Prompts
+1. On the My Watchlist page (/watchlist/), add a compact row of DaisyUI stat cards or badges right below the page heading and above the search and filter form showing the user's Total saved count alongside counts for each watchlist status (Plan to Watch, Watching, On Hold, Watched, and Dropped). Keep it clean and update or add tests so pytest passes.
+2. The 6 summary cards are stacking vertically in one tall column and taking up too much vertical space. Make all 6 summary cards sit side-by-side,  rebuild the Tailwind CSS file so the layout classes apply, and run pytest to verify everything still passes.
+3. The  6 items are still stacking vertically inside one big white box. Please replace the DaisyUI stats layout classes in templates/watchlist/_watchlist_stats.html with standard Tailwind flexbox classes so all 6 counts sit side-by-side horizontally, rebuild static/css/app.css, and run pytest.
+4. The horizontal summary bar looks great in the browser now. Please update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:** The My Watchlist page now has a horizontal summary bar between the heading and the filter form. It shows Total saved (highlighted), then Plan to watch, Watching, On hold, Watched and Dropped, in that order.
+  - `watchlist_stats(user)` in `watchlist/views.py` gets all the counts in one grouped query, limited to the logged-in user. The counts cover the whole watchlist and ignore the current filters.
+  - The bar is `templates/watchlist/_watchlist_stats.html`, a single non-wrapping Tailwind flex row that scrolls sideways on narrow screens.
+  - An inline status change from a row's dropdown now returns the row plus refreshed counts (`templates/watchlist/_status_saved.html`), which htmx swaps in out of band, so the bar never goes stale.
+  - A new `versioned_static` template tag adds the CSS file's modified time to the stylesheet URL in `base.html` (`app.css?v=…`), so browsers load each rebuilt CSS file.
+  - `static/css/app.css` was rebuilt. Tests: a new `tests/test_watchlist_stats.py` (5 tests) and a version-stamp check in `tests/test_layout.py`. 210 tests pass, and ruff is clean.
+- **Deviations:**
+  - I asked for the cards side by side twice (prompts 2 and 3). The second time I named the fix myself: plain Tailwind flexbox instead of DaisyUI's stats classes.
+  - Claude added the cache-busting template tag without being asked, to address the stale-CSS cause, and said so in its reply.
+  - Claude ordered the cards the way I listed them (On hold before Watched). That differs from the status dropdown, which follows the model's order.
+- **Sideways:**
+  - The cards stacked in my browser after the first change and again after the second. Each time the rebuilt CSS on disk had the right rules, which Claude checked with grep. The real cause was the browser serving the old cached `app.css`: it had the box classes but none of the new layout rules.
+  - In prompt 2, Claude diagnosed likely caching but only suggested a hard refresh (Ctrl+F5) and switched to DaisyUI's `stats-horizontal`. That didn't fix it, because the old cached CSS had no `.stats` rules either. In prompt 3, Claude compared against the committed CSS, confirmed the cause, and added the versioned stylesheet URL so it wouldn't happen again.
+  - Claude never checked the page in a browser itself. Layout was verified only through compiled-CSS greps and tests, until I confirmed it looked right.
+
 ## 2026-11-14 — Added an API watchlist update script and documented both scripts
 
 ### Prompts

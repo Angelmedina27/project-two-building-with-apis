@@ -1,4 +1,5 @@
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -51,6 +52,8 @@ def test_base_layout_loads_compiled_css_and_htmx_with_csrf_header(client, user):
     client.force_login(user)
     html = client.get("/watchlist/").content.decode()
     assert "css/app.css" in html
+    # The stylesheet URL carries a version stamp, so a rebuilt CSS file isn't served from cache.
+    assert re.search(r'href="/static/css/app\.css\?v=\d+"', html)
     assert "js/htmx.min.js" in html
     assert 'hx-headers=\'{"X-CSRFToken": "' in html
 

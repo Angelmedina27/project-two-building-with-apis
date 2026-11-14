@@ -1,0 +1,15 @@
+{# Counts cover the whole watchlist, not the current filters. #}
+{# A single flex row: the six counts always sit side by side; narrow screens scroll it sideways. #}
+<section id="watchlist-stats" aria-label="Watchlist summary"{% if oob %} hx-swap-oob="true"{% endif %}
+         class="flex flex-row flex-nowrap overflow-x-auto divide-x divide-base-300 bg-base-100 border border-base-300 rounded-box mb-4">
+  <div class="flex-1 min-w-max px-4 py-2 bg-primary text-primary-content">
+    <div class="text-xs whitespace-nowrap opacity-80">Total saved</div>
+    <div class="text-2xl font-bold" data-stat="total">{{ stats.total }}</div>
+  </div>
+  {% for stat in stats.by_status %}
+    <div class="flex-1 min-w-max px-4 py-2">
+      <div class="text-xs whitespace-nowrap opacity-70">{{ stat.label }}</div>
+      <div class="text-2xl font-bold" data-stat="{{ stat.value }}">{{ stat.count }}</div>
+    </div>
+  {% endfor %}
+</section>

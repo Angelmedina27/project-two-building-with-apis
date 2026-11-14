@@ -1,0 +1,3 @@
+{% include "watchlist/_watchlist_row.html" %}
+{# Wrapped in <template> so the browser parses it next to a table row; htmx swaps it out of band. #}
+<template>{% include "watchlist/_watchlist_stats.html" with oob=True %}</template>

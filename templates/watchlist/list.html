@@ -2,6 +2,7 @@
 {% block title %}My Watchlist{% endblock %}
 {% block content %}
 <h1 class="text-2xl font-bold mb-4">My Watchlist</h1>
+{% include "watchlist/_watchlist_stats.html" %}
 {# A plain GET form; htmx upgrades it to swap only the list and push the URL. #}
 <form method="get" action="{% url 'watchlist' %}" role="search"
       hx-get="{% url 'watchlist' %}" hx-target="#watchlist-results" hx-push-url="true"

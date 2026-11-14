@@ -3,6 +3,7 @@ from urllib.parse import urlencode, urlsplit
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
+from django.db.models import Count
 from django.http import HttpResponseBadRequest
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -24,6 +25,33 @@ def home(request):
 
 
 WATCHLIST_PAGE_SIZE = 10
+
+# The order the summary cards appear in, which follows a title's usual life cycle.
+STATS_ORDER = [
+    WatchlistItem.Status.PLAN,
+    WatchlistItem.Status.WATCHING,
+    WatchlistItem.Status.ON_HOLD,
+    WatchlistItem.Status.WATCHED,
+    WatchlistItem.Status.DROPPED,
+]
+
+
+def watchlist_stats(user):
+    """The user's total saved count and a count per status, from one grouped query."""
+    rows = (
+        WatchlistItem.objects.filter(user=user)
+        .order_by()  # Clear the model's default ordering so it doesn't split the groups.
+        .values("status")
+        .annotate(count=Count("pk"))
+    )
+    counts = {row["status"]: row["count"] for row in rows}
+    return {
+        "total": sum(counts.values()),
+        "by_status": [
+            {"value": status.value, "label": status.label, "count": counts.get(status, 0)}
+            for status in STATS_ORDER
+        ],
+    }
 
 
 @htmx_login_required
@@ -49,6 +77,7 @@ def watchlist(request):
         "filters": filters,
         "status_choices": WatchlistItem.Status.choices,
         "sort_choices": [(value, label) for value, (label, _) in SORTS.items()],
+        "stats": watchlist_stats(request.user),
         "page_obj": page_obj,
         "items": page_obj.object_list,
         # Tells "nothing matches these filters" apart from "nothing saved yet".
@@ -226,8 +255,14 @@ def item_status(request, pk):
         return HttpResponseBadRequest("Invalid status.")
     item.status = status
     item.save(update_fields=["status", "updated_at"])
-    context = {"item": item, "status_choices": WatchlistItem.Status.choices, "just_saved": True}
-    return render(request, "watchlist/_watchlist_row.html", context)
+    context = {
+        "item": item,
+        "status_choices": WatchlistItem.Status.choices,
+        "just_saved": True,
+        # Sent out of band so the summary cards above the list stay in step.
+        "stats": watchlist_stats(request.user),
+    }
+    return render(request, "watchlist/_status_saved.html", context)
 
 
 @require_POST
