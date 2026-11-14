@@ -28,6 +28,29 @@ Each entry has this shape:
     - **Deviations:** recommendations overridden, follow-up questions asked
     - **Sideways:** failures, wrong turns, and how they were caught
 
+## 2026-11-14 — Added an API watchlist update script and documented both scripts
+
+### Prompts
+1. Check our existing scripts/ folder and README.me and add our second Python script in scripts/ that reads our API token from .env, lists our saved items from GET /api/watchlist/, updates one field like status or rating via PATCH, and prints the before-and-after output. Also update README.md and .env.example with how to get a token and run both scripts.
+2. The script works fine. Please update PROMPTS.md with our session log using the standard format.
+
+### Summary
+- **Outcome:** Added `scripts/watchlist_update.py`, written in the same style as `tmdb_check.py`.
+  - It reads `CINEMOVTRACKER_API_TOKEN` and an optional `CINEMOVTRACKER_API_URL` (default `http://127.0.0.1:8000`) from `.env`.
+  - It lists every item from `GET /api/watchlist/`, following page links.
+  - It PATCHes one field (`status`, `rating`, or `notes`) and prints the item before and after the change.
+  - The item, field, and value can be passed as arguments (`1 rating 9`). With no arguments, the script asks for them after printing the list.
+  - It checks the value before sending it, and it handles a missing or rejected token (401), a server that isn't running, a 404, and a 400 with a clear message.
+
+  `README.md` has a new "Scripts" section covering both scripts. It shows how to get a token (curl, PowerShell `Invoke-RestMethod`, or the admin page), how to put it in `.env`, the different ways to run each script, and real sample output. `scripts/` was added to the project layout. `.env.example` has the two new variables and the curl command for getting a token. I confirmed the script works.
+- **Deviations:** No questions were asked, so none of my choices overrode a recommendation. Claude chose several details without asking: the environment variable names, supporting both arguments and prompts, including `notes` as an editable field, and `none` to clear a rating.
+- **Sideways:**
+  - My prompt said "README.me" and meant `README.md`.
+  - `ruff format` reformatted one line of the new script after `ruff check` had passed.
+  - Claude didn't run the script against my real `db.sqlite3`. It tested it on a dev server (port 8765) that used a separate scratch database with a seeded user and two items. A rating change, a status change from the prompts, a bad status, a missing token, and a wrong token all behaved correctly.
+  - The first README draft showed made-up sample output for `tmdb_check.py` (a specific rating for Dune). Claude caught this before finishing and replaced it with placeholders.
+  - The new script has no automated tests. Ruff and the existing suite (205 tests) pass.
+
 ## 2026-11-13 — Implemented Phase 8: TMDB refresh command and README
 
 ### Prompts

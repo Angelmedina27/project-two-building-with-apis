@@ -135,6 +135,94 @@ Errors:
 `media_type`, `tmdb_id`, and all TMDB fields can't be changed after creation. To switch to a
 different title, delete the item and add the new one.
 
+## Scripts
+
+`scripts/` holds two standalone console scripts. Both read their settings from `.env` at the
+repo root, so run them from there.
+
+### 1. `tmdb_check.py`: check your TMDB key
+
+Confirms that `TMDB_API_KEY` works by searching TMDB directly. Django doesn't need to be running.
+
+```bash
+uv run scripts/tmdb_check.py
+# Search: dune
+#  1. [Movie] <title> (<release date>)  rating <score>/10  id <tmdb id>
+#     <overview>
+# ...
+# Pick 1-10 for details, or press Enter to search again:
+```
+
+Press Enter or type `q` at the search prompt to quit.
+
+### 2. `watchlist_update.py`: list and update your watchlist through the API
+
+Calls this project's own REST API. It lists every item you've saved (`GET /api/watchlist/`,
+following all pages), sends a `PATCH` to change one field (`status`, `rating`, or `notes`) of
+one item, and prints that item before and after the change.
+
+**Get a token.** Start the dev server (`uv run python manage.py runserver`), sign up on the
+website if you haven't yet, and save at least one title. Then exchange your username and password
+for a token:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/auth/token/ \
+     -d "username=alice" -d "password=your-password"
+# {"token":"9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b"}
+```
+
+PowerShell users can run `curl.exe` with the same arguments on one line, or use
+`Invoke-RestMethod -Method Post http://127.0.0.1:8000/api/auth/token/ -Body @{username="alice"; password="your-password"}`.
+Asking again returns the same token. You can also create one as an admin at
+<http://127.0.0.1:8000/admin/> under **Auth Token → Tokens**.
+
+Put the token in `.env`. Treat it like a password, because anyone who has it can change your
+watchlist.
+
+```dotenv
+CINEMOVTRACKER_API_TOKEN=9944b09199c62bcf9418ad846dd0e4bbdfc6ee4b
+# CINEMOVTRACKER_API_URL=http://127.0.0.1:8000   # optional; this is the default
+```
+
+**Run it** while the dev server is running. Pass the item ID, field, and new value, or pass
+nothing to pick them at prompts after the list prints.
+
+```bash
+uv run scripts/watchlist_update.py                      # list, then prompt
+uv run scripts/watchlist_update.py 1 rating 9           # rating: 1-10, or "none" to clear
+uv run scripts/watchlist_update.py 1 status watched     # plan, watching, watched, on_hold, dropped
+uv run scripts/watchlist_update.py 1 notes "Loved it."  # "" clears the notes
+```
+
+```text
+Your watchlist (2 item(s)) from http://127.0.0.1:8000/api/watchlist/:
+
+   2  TV     Breaking Bad (2008)  status=watching  rating=-
+   1  Movie  Dune: Part Two (2024)  status=plan  rating=-
+
+Before:
+  id:         1
+  title:      Dune: Part Two (2024)
+  status:     plan
+  rating:     (none)
+  notes:      (none)
+  updated_at: 2026-11-14T19:33:44.488296Z
+
+PATCH http://127.0.0.1:8000/api/watchlist/1/  {'rating': 9}
+
+After:
+  id:         1
+  title:      Dune: Part Two (2024)
+  status:     plan
+  rating:     9
+  notes:      (none)
+  updated_at: 2026-11-14T19:34:01.023354Z
+```
+
+The script checks the value before sending it. It exits with an error message if the token is
+missing or rejected (401), the server isn't running, the ID isn't one of your items (404), or the
+API rejects the value (400).
+
 ## Keeping TMDB data fresh (`refresh_tmdb`)
 
 TMDB's terms forbid caching their content for more than 6 months. The `refresh_tmdb` command
@@ -185,6 +273,7 @@ watchlist/    model, TMDB client (tmdb.py), services, filtering, views, forms,
               api/ (DRF), management/commands/refresh_tmdb.py
 templates/    base layout (navbar, messages, TMDB footer) and page templates
 static/       Tailwind input + DaisyUI plugin, compiled CSS, vendored HTMX, TMDB logo
+scripts/      standalone console scripts (tmdb_check.py, watchlist_update.py)
 tests/        pytest suite
 ```
 
